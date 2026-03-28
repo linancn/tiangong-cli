@@ -43,27 +43,21 @@ npm update && npm ci
 cp .env.example .env
 ```
 
-推荐优先使用新的统一环境变量名：
+当前统一 CLI 真正需要的环境变量只有这一组：
 
 ```bash
-TIANGONG_API_BASE_URL=
-TIANGONG_API_KEY=
-TIANGONG_REGION=us-east-1
-
-TIANGONG_KB_BASE_URL=
-TIANGONG_KB_API_KEY=
-
-TIANGONG_MINERU_BASE_URL=
-TIANGONG_MINERU_API_KEY=
+TIANGONG_LCA_API_BASE_URL=
+TIANGONG_LCA_API_KEY=
+TIANGONG_LCA_REGION=us-east-1
 ```
 
-迁移期兼容旧变量名，但只作为 alias：
+不再兼容旧变量名，也不再把 KB、MinerU、OpenAI、MCP 相关 env 预先塞进统一 CLI。
 
-- `SUPABASE_FUNCTIONS_URL -> TIANGONG_API_BASE_URL`
-- `SUPABASE_FUNCTION_REGION -> TIANGONG_REGION`
-- `TIANGONG_LCA_APIKEY -> TIANGONG_API_KEY`
-- `TIANGONG_MINERU_WITH_IMAGE_URL -> TIANGONG_MINERU_BASE_URL`
-- `TIANGONG_MINERU_WITH_IMAGE_API_KEY -> TIANGONG_MINERU_API_KEY`
+原因很直接：
+
+- 当前 CLI 已实现命令只直连 TianGong LCA 的 REST / Edge Functions
+- 知识库、OCR、LLM、远程 MCP 连接目前仍属于 `tiangong-lca-skills` 或 Python workflow 层
+- 若未来 CLI 真正落地对应子命令，再按命令面新增 env，而不是提前暴露一整组无实际消费者的配置
 
 ## 调试项目
 
@@ -90,6 +84,7 @@ npm run dev -- --help
 
 ```bash
 npm run lint
+npm run prettier
 npm test
 npm run test:coverage
 npm run test:coverage:assert-full
@@ -98,6 +93,8 @@ npm run prepush:gate
 
 说明：
 
+- `npm run lint` 会执行 `eslint`、deprecated API 检查、`prettier --check` 和 `tsc`
+- `npm run prettier` 用于实际改写格式
 - `npm test` 包含普通单元测试和 `bin` / 入口 smoke test
 - `npm run test:coverage` 对 `src/**/*.ts` 执行 100% 覆盖率门
 - `npm run prepush:gate` 是提交前的完整质量门

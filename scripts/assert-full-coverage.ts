@@ -29,7 +29,7 @@ function listTrackedSourceFiles(rootDir: string, relativeDir: string): string[] 
   }
 
   return files;
-};
+}
 
 const summaryPath = path.join(process.cwd(), 'coverage', 'coverage-summary.json');
 const summary = JSON.parse(readFileSync(summaryPath, 'utf8')) as CoverageSummary;
@@ -49,4 +49,6 @@ for (const filePath of expectedFiles) {
   }
 }
 
-process.stdout.write('Coverage assertion passed: 100% on lines, statements, functions, and branches.\n');
+process.stdout.write(
+  'Coverage assertion passed: 100% on lines, statements, functions, and branches.\n',
+);

@@ -36,13 +36,13 @@ tiangong
 
 对应关系：
 
-| CLI 命令 | 当前后端能力 |
-| --- | --- |
-| `tiangong doctor` | 本地环境诊断、`.env` 加载、旧变量 alias 检查 |
-| `tiangong search flow` | `flow_hybrid_search` |
-| `tiangong search process` | `process_hybrid_search` |
-| `tiangong search lifecyclemodel` | `lifecyclemodel_hybrid_search` |
-| `tiangong admin embedding-run` | `embedding_ft` |
+| CLI 命令                         | 当前后端能力                                 |
+| -------------------------------- | -------------------------------------------- |
+| `tiangong doctor`                | 本地环境诊断、`.env` 加载、统一 env 合同检查 |
+| `tiangong search flow`           | `flow_hybrid_search`                         |
+| `tiangong search process`        | `process_hybrid_search`                      |
+| `tiangong search lifecyclemodel` | `lifecyclemodel_hybrid_search`               |
+| `tiangong admin embedding-run`   | `embedding_ft`                               |
 
 ### 2.2 已经固定的工程约束
 
@@ -141,38 +141,27 @@ tiangong admin embedding-run --input ./jobs.json --dry-run
 新的标准变量名：
 
 ```bash
-TIANGONG_API_BASE_URL=
-TIANGONG_API_KEY=
-TIANGONG_REGION=us-east-1
-
-TIANGONG_KB_BASE_URL=
-TIANGONG_KB_API_KEY=
-
-TIANGONG_MINERU_BASE_URL=
-TIANGONG_MINERU_API_KEY=
+TIANGONG_LCA_API_BASE_URL=
+TIANGONG_LCA_API_KEY=
+TIANGONG_LCA_REGION=us-east-1
 ```
 
-### 5.2 迁移期 alias
-
-CLI 当前兼容旧变量名：
-
-- `SUPABASE_FUNCTIONS_URL -> TIANGONG_API_BASE_URL`
-- `SUPABASE_FUNCTION_REGION -> TIANGONG_REGION`
-- `TIANGONG_LCA_APIKEY -> TIANGONG_API_KEY`
-- `TIANGONG_MINERU_WITH_IMAGE_URL -> TIANGONG_MINERU_BASE_URL`
-- `TIANGONG_MINERU_WITH_IMAGE_API_KEY -> TIANGONG_MINERU_API_KEY`
+这就是当前 CLI 的完整 env 面。
 
 规则是：
 
-- 新代码只写新变量名
-- 旧变量名只作为迁移兼容，不再扩散
+- 只为当前已实现的命令暴露 env
+- 不为了历史实现或未来猜测保留 alias
+- 某类能力如果还停留在 skills / Python workflow 层，就继续由那一层自己管理 env
+- 因此当前不预放 `TIANGONG_KB_*`、`TIANGONG_MINERU_*`、`OPENAI_*` 或 `TIANGONG_LCA_REMOTE_*`
 
 ## 6. 质量门
 
 ### 6.1 当前质量门
 
 ```bash
-npm run typecheck
+npm run lint
+npm run prettier
 npm test
 npm run test:coverage
 npm run test:coverage:assert-full
@@ -207,12 +196,12 @@ npm run prepush:gate
 
 最适合先迁移到统一 CLI 的，是当前的薄远程 skill：
 
-| 当前 skill | 目标 CLI |
-| --- | --- |
-| `flow-hybrid-search` | `tiangong search flow` |
-| `process-hybrid-search` | `tiangong search process` |
+| 当前 skill                     | 目标 CLI                         |
+| ------------------------------ | -------------------------------- |
+| `flow-hybrid-search`           | `tiangong search flow`           |
+| `process-hybrid-search`        | `tiangong search process`        |
 | `lifecyclemodel-hybrid-search` | `tiangong search lifecyclemodel` |
-| `embedding-ft` | `tiangong admin embedding-run` |
+| `embedding-ft`                 | `tiangong admin embedding-run`   |
 
 ### 7.3 暂不全量重写的对象
 
@@ -235,13 +224,13 @@ npm run prepush:gate
 推荐约定：
 
 - 默认路径：`${WORKSPACE_ROOT}/tiangong-lca-cli`
-- 可覆盖路径：`TIANGONG_CLI_DIR`
+- 可覆盖路径：`TIANGONG_LCA_CLI_DIR`
 
 调用方式优先顺序：
 
-1. `node "${TIANGONG_CLI_DIR}/bin/tiangong.js" ...`
-2. `node "${TIANGONG_CLI_DIR}/dist/src/main.js" ...`
-3. `npm exec --prefix "${TIANGONG_CLI_DIR}" tiangong -- ...`
+1. `node "${TIANGONG_LCA_CLI_DIR}/bin/tiangong.js" ...`
+2. `node "${TIANGONG_LCA_CLI_DIR}/dist/src/main.js" ...`
+3. `npm exec --prefix "${TIANGONG_LCA_CLI_DIR}" tiangong -- ...`
 
 不要再在 skill 内部重复实现一套 `curl` 参数解析和环境变量规则。
 
@@ -276,5 +265,4 @@ npm run prepush:gate
 
 如果后续继续扩能力，也必须遵守同一条原则：
 
-先判断它是不是稳定的业务动作，
-再决定它是不是应该进入 `tiangong` 命令树。
+先判断它是不是稳定的业务动作，再决定它是不是应该进入 `tiangong` 命令树。

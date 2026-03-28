@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const maybeTest = process.env.TIANGONG_COVERAGE === '1' ? test.skip : test;
+const maybeTest = process.env.TIANGONG_LCA_COVERAGE === '1' ? test.skip : test;
 
 maybeTest('runFromBin executes when imported without direct auto-run', async () => {
   const { runFromBin } = await import('../bin/tiangong.js');
@@ -20,13 +20,10 @@ maybeTest('runFromBin executes when imported without direct auto-run', async () 
   }) as typeof process.stderr.write;
 
   try {
-    const exitCode = await runFromBin(
-      ['doctor', '--json'],
-      {
-        TIANGONG_API_BASE_URL: 'https://example.com/functions/v1',
-        TIANGONG_API_KEY: 'secret-token',
-      },
-    );
+    const exitCode = await runFromBin(['doctor', '--json'], {
+      TIANGONG_LCA_API_BASE_URL: 'https://example.com/functions/v1',
+      TIANGONG_LCA_API_KEY: 'secret-token',
+    });
 
     assert.equal(exitCode, 0);
     assert.match(stdout, /"ok":true/u);

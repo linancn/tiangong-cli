@@ -25,13 +25,14 @@ The stable launcher is `bin/tiangong.js`. It loads the compiled runtime at `dist
 
 The repository enforces:
 
-- `npm run typecheck`
+- `npm run lint`
+- `npm run prettier`
 - `npm test`
 - `npm run test:coverage`
 - `npm run test:coverage:assert-full`
 - `npm run prepush:gate`
 
-Coverage is enforced at 100% for `src/**/*.ts`. Launcher smoke tests remain in the normal test suite.
+`npm run lint` is the required local gate. It runs `eslint`, deprecated API diagnostics, `prettier --check`, and `tsc`. Coverage is enforced at 100% for `src/**/*.ts`. Launcher smoke tests remain in the normal test suite.
 
 ## Quick start
 
@@ -52,6 +53,16 @@ Create `.env`:
 ```bash
 cp .env.example .env
 ```
+
+Current CLI env contract:
+
+```bash
+TIANGONG_LCA_API_BASE_URL=
+TIANGONG_LCA_API_KEY=
+TIANGONG_LCA_REGION=us-east-1
+```
+
+This CLI does not currently require KB, MinerU, MCP, or OpenAI env keys. Those remain skill- or workflow-specific until the corresponding subcommands are actually implemented here.
 
 Run the CLI:
 

@@ -1,6 +1,5 @@
 export type EnvSpec = {
-  canonical: string;
-  aliases: string[];
+  key: string;
   required: boolean;
   description: string;
   defaultValue?: string;
@@ -8,54 +7,33 @@ export type EnvSpec = {
 
 export type ResolvedEnv = {
   key: string;
-  source: 'canonical' | 'default' | 'missing' | `alias:${string}`;
+  source: 'env' | 'default' | 'missing';
   value: string | null;
   present: boolean;
 };
 
+export const ENV_KEYS = {
+  apiBaseUrl: 'TIANGONG_LCA_API_BASE_URL',
+  apiKey: 'TIANGONG_LCA_API_KEY',
+  region: 'TIANGONG_LCA_REGION',
+} as const;
+
 export const ENV_SPECS: EnvSpec[] = [
   {
-    canonical: 'TIANGONG_API_BASE_URL',
-    aliases: ['SUPABASE_FUNCTIONS_URL'],
+    key: ENV_KEYS.apiBaseUrl,
     required: true,
-    description: 'Main TianGong API / Edge Functions base URL',
+    description: 'Main TianGong LCA API / Edge Functions base URL',
   },
   {
-    canonical: 'TIANGONG_API_KEY',
-    aliases: ['TIANGONG_LCA_APIKEY'],
+    key: ENV_KEYS.apiKey,
     required: true,
-    description: 'Main TianGong API key',
+    description: 'Main TianGong LCA API key',
   },
   {
-    canonical: 'TIANGONG_REGION',
-    aliases: ['SUPABASE_FUNCTION_REGION'],
+    key: ENV_KEYS.region,
     required: false,
-    description: 'Target API region',
+    description: 'Target TianGong LCA API region',
     defaultValue: 'us-east-1',
-  },
-  {
-    canonical: 'TIANGONG_KB_BASE_URL',
-    aliases: [],
-    required: false,
-    description: 'Knowledge base API base URL',
-  },
-  {
-    canonical: 'TIANGONG_KB_API_KEY',
-    aliases: [],
-    required: false,
-    description: 'Knowledge base API key',
-  },
-  {
-    canonical: 'TIANGONG_MINERU_BASE_URL',
-    aliases: ['TIANGONG_MINERU_WITH_IMAGE_URL'],
-    required: false,
-    description: 'MinerU API base URL',
-  },
-  {
-    canonical: 'TIANGONG_MINERU_API_KEY',
-    aliases: ['TIANGONG_MINERU_WITH_IMAGE_API_KEY'],
-    required: false,
-    description: 'MinerU API key',
   },
 ];
 
@@ -63,7 +41,6 @@ export type DoctorCheck = {
   key: string;
   description: string;
   required: boolean;
-  aliases: string[];
   source: ResolvedEnv['source'];
   present: boolean;
   valuePreview: string | null;
@@ -77,32 +54,26 @@ export type DoctorReport = {
   checks: DoctorCheck[];
 };
 
+export type RuntimeEnv = {
+  apiBaseUrl: string | null;
+  apiKey: string | null;
+  region: string;
+};
+
 export function resolveEnv(spec: EnvSpec, env: NodeJS.ProcessEnv): ResolvedEnv {
-  const canonicalValue = env[spec.canonical];
-  if (canonicalValue) {
+  const envValue = env[spec.key];
+  if (envValue) {
     return {
-      key: spec.canonical,
-      source: 'canonical',
-      value: canonicalValue,
+      key: spec.key,
+      source: 'env',
+      value: envValue,
       present: true,
     };
   }
 
-  for (const alias of spec.aliases) {
-    const aliasValue = env[alias];
-    if (aliasValue) {
-      return {
-        key: spec.canonical,
-        source: `alias:${alias}`,
-        value: aliasValue,
-        present: true,
-      };
-    }
-  }
-
   if (spec.defaultValue !== undefined) {
     return {
-      key: spec.canonical,
+      key: spec.key,
       source: 'default',
       value: spec.defaultValue,
       present: true,
@@ -110,10 +81,22 @@ export function resolveEnv(spec: EnvSpec, env: NodeJS.ProcessEnv): ResolvedEnv {
   }
 
   return {
-    key: spec.canonical,
+    key: spec.key,
     source: 'missing',
     value: null,
     present: false,
+  };
+}
+
+export function readRuntimeEnv(env: NodeJS.ProcessEnv): RuntimeEnv {
+  const apiBaseUrl = resolveEnv(ENV_SPECS[0], env).value;
+  const apiKey = resolveEnv(ENV_SPECS[1], env).value;
+  const region = resolveEnv(ENV_SPECS[2], env).value as string;
+
+  return {
+    apiBaseUrl,
+    apiKey,
+    region,
   };
 }
 
@@ -134,10 +117,9 @@ export function buildDoctorReport(
   const checks = ENV_SPECS.map((spec) => {
     const resolved = resolveEnv(spec, env);
     return {
-      key: spec.canonical,
+      key: spec.key,
       description: spec.description,
       required: spec.required,
-      aliases: spec.aliases,
       source: resolved.source,
       present: resolved.present,
       valuePreview: maskSecret(resolved.value),

@@ -23,6 +23,7 @@ npm install
 npm start -- --help
 npm run dev -- --help
 npm run lint
+npm run prettier
 npm test
 npm run test:coverage
 npm run test:coverage:assert-full
@@ -32,7 +33,8 @@ npm run build
 
 Notes:
 
-- `npm run lint` is currently the required local syntax / type gate.
+- `npm run lint` is the required local gate: `eslint + deprecated diagnostics + prettier --check + tsc`.
+- `npm run prettier` is the write-mode formatter.
 - `npm run test:coverage` enforces `100%` coverage for `src/**/*.ts`.
 - `npm run test:coverage:assert-full` verifies the latest coverage artifact without rerunning coverage.
 - `npm run prepush:gate` is the full local push gate: `lint + full coverage + strict 100% assertion`.

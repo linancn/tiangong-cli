@@ -1,54 +1,40 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildDoctorReport, maskSecret, resolveEnv } from '../src/lib/env.js';
+import test from 'node:test';
+import { buildDoctorReport, maskSecret, readRuntimeEnv, resolveEnv } from '../src/lib/env.js';
 
-test('resolveEnv prefers canonical env keys', () => {
+test('resolveEnv prefers a present env key', () => {
   const resolved = resolveEnv(
     {
-      canonical: 'A',
-      aliases: ['B'],
+      key: 'A',
       required: true,
       description: 'demo',
     },
-    { A: 'canonical', B: 'alias' },
+    { A: 'canonical' },
   );
 
-  assert.equal(resolved.source, 'canonical');
+  assert.equal(resolved.source, 'env');
   assert.equal(resolved.value, 'canonical');
 });
 
-test('resolveEnv falls back to alias and defaults', () => {
-  const aliasResolved = resolveEnv(
+test('resolveEnv falls back to defaults when env is missing', () => {
+  const resolved = resolveEnv(
     {
-      canonical: 'A',
-      aliases: ['B'],
-      required: true,
-      description: 'demo',
-    },
-    { B: 'alias' },
-  );
-  assert.equal(aliasResolved.source, 'alias:B');
-  assert.equal(aliasResolved.value, 'alias');
-
-  const defaultResolved = resolveEnv(
-    {
-      canonical: 'A',
-      aliases: [],
+      key: 'A',
       required: false,
       description: 'demo',
       defaultValue: 'fallback',
     },
     {},
   );
-  assert.equal(defaultResolved.source, 'default');
-  assert.equal(defaultResolved.value, 'fallback');
+
+  assert.equal(resolved.source, 'default');
+  assert.equal(resolved.value, 'fallback');
 });
 
 test('resolveEnv reports missing when nothing is available', () => {
   const resolved = resolveEnv(
     {
-      canonical: 'A',
-      aliases: [],
+      key: 'A',
       required: true,
       description: 'demo',
     },
@@ -60,22 +46,35 @@ test('resolveEnv reports missing when nothing is available', () => {
   assert.equal(resolved.value, null);
 });
 
+test('readRuntimeEnv returns the canonical TianGong LCA runtime config', () => {
+  const runtime = readRuntimeEnv({
+    TIANGONG_LCA_API_BASE_URL: 'https://example.com/functions/v1',
+    TIANGONG_LCA_API_KEY: 'secret-token',
+  });
+
+  assert.deepEqual(runtime, {
+    apiBaseUrl: 'https://example.com/functions/v1',
+    apiKey: 'secret-token',
+    region: 'us-east-1',
+  });
+});
+
 test('maskSecret leaves short values unchanged and masks longer values', () => {
   assert.equal(maskSecret(null), null);
   assert.equal(maskSecret('short'), 'short');
   assert.equal(maskSecret('1234567890'), '1234...7890');
 });
 
-test('buildDoctorReport records missing required env keys', () => {
+test('buildDoctorReport records canonical TianGong LCA env keys', () => {
   const report = buildDoctorReport(
     {
-      SUPABASE_FUNCTIONS_URL: 'https://example.com',
-      TIANGONG_LCA_APIKEY: 'secret-token',
+      TIANGONG_LCA_API_BASE_URL: 'https://example.com',
+      TIANGONG_LCA_API_KEY: 'secret-token',
     },
     { loaded: true, path: '/tmp/.env', count: 2 },
   );
 
   assert.equal(report.ok, true);
-  const apiKeyCheck = report.checks.find((check) => check.key === 'TIANGONG_API_KEY');
-  assert.equal(apiKeyCheck?.source, 'alias:TIANGONG_LCA_APIKEY');
+  const apiKeyCheck = report.checks.find((check) => check.key === 'TIANGONG_LCA_API_KEY');
+  assert.equal(apiKeyCheck?.source, 'env');
 });

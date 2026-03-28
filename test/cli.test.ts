@@ -15,9 +15,9 @@ const dotEnvStatus: DotEnvLoadResult = {
 
 const makeDeps = (overrides?: Partial<NodeJS.ProcessEnv>) => ({
   env: {
-    TIANGONG_API_BASE_URL: 'https://example.com/functions/v1',
-    TIANGONG_API_KEY: 'secret-token',
-    TIANGONG_REGION: 'us-east-1',
+    TIANGONG_LCA_API_BASE_URL: 'https://example.com/functions/v1',
+    TIANGONG_LCA_API_KEY: 'secret-token',
+    TIANGONG_LCA_REGION: 'us-east-1',
     ...overrides,
   } as NodeJS.ProcessEnv,
   dotEnvStatus,
@@ -66,20 +66,17 @@ test('executeCli returns doctor text and success status', async () => {
 });
 
 test('executeCli doctor text reports loaded dotenv metadata and missing keys', async () => {
-  const result = await executeCli(
-    ['doctor'],
-    {
-      env: {
-        TIANGONG_KB_API_KEY: 'secret',
-      } as NodeJS.ProcessEnv,
-      dotEnvStatus: {
-        loaded: true,
-        path: '/tmp/.env',
-        count: 1,
-      },
-      fetchImpl: makeDeps().fetchImpl,
+  const result = await executeCli(['doctor'], {
+    env: {
+      TIANGONG_LCA_REGION: 'cn-east-1',
+    } as NodeJS.ProcessEnv,
+    dotEnvStatus: {
+      loaded: true,
+      path: '/tmp/.env',
+      count: 1,
     },
-  );
+    fetchImpl: makeDeps().fetchImpl,
+  });
 
   assert.equal(result.exitCode, 1);
   assert.match(result.stdout, /\.env loaded: yes \(1 keys\)/u);
@@ -97,10 +94,8 @@ test('executeCli returns doctor json and failure status when required env is mis
   const result = await executeCli(
     ['doctor', '--json'],
     makeDeps({
-      TIANGONG_API_BASE_URL: '',
-      TIANGONG_API_KEY: '',
-      SUPABASE_FUNCTIONS_URL: '',
-      TIANGONG_LCA_APIKEY: '',
+      TIANGONG_LCA_API_BASE_URL: '',
+      TIANGONG_LCA_API_KEY: '',
     }),
   );
   assert.equal(result.exitCode, 1);
@@ -176,8 +171,8 @@ test('executeCli respects explicit remote override flags', async () => {
   }
 });
 
-test('executeCli resolves remote config from legacy alias env keys', async () => {
-  const dir = mkdtempSync(path.join(os.tmpdir(), 'tg-cli-search-alias-'));
+test('executeCli resolves remote config from canonical TIANGONG_LCA_* env keys', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'tg-cli-search-env-'));
   const inputPath = path.join(dir, 'request.json');
   writeFileSync(inputPath, '{"query":"steel"}', 'utf8');
 
@@ -185,17 +180,14 @@ test('executeCli resolves remote config from legacy alias env keys', async () =>
     const result = await executeCli(
       ['search', 'process', '--dry-run', '--input', inputPath],
       makeDeps({
-        TIANGONG_API_BASE_URL: undefined,
-        TIANGONG_API_KEY: undefined,
-        TIANGONG_REGION: undefined,
-        SUPABASE_FUNCTIONS_URL: 'https://legacy.example/functions/v1',
-        TIANGONG_LCA_APIKEY: 'legacy-token',
-        SUPABASE_FUNCTION_REGION: 'cn-east-1',
+        TIANGONG_LCA_API_BASE_URL: 'https://env.example/functions/v1',
+        TIANGONG_LCA_API_KEY: 'env-token',
+        TIANGONG_LCA_REGION: 'cn-east-1',
       }),
     );
 
     assert.equal(result.exitCode, 0);
-    assert.match(result.stdout, /legacy\.example\/functions\/v1\/process_hybrid_search/u);
+    assert.match(result.stdout, /env\.example\/functions\/v1\/process_hybrid_search/u);
     assert.match(result.stdout, /cn-east-1/u);
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -211,8 +203,7 @@ test('executeCli executes admin embedding-run dry-run with default region fallba
     const result = await executeCli(
       ['admin', 'embedding-run', '--dry-run', '--input', inputPath],
       makeDeps({
-        TIANGONG_REGION: undefined,
-        SUPABASE_FUNCTION_REGION: undefined,
+        TIANGONG_LCA_REGION: undefined,
       }),
     );
 
@@ -233,12 +224,9 @@ test('executeCli surfaces missing search API configuration after exhausting all 
     const result = await executeCli(
       ['search', 'flow', '--input', inputPath],
       makeDeps({
-        TIANGONG_API_BASE_URL: undefined,
-        SUPABASE_FUNCTIONS_URL: undefined,
-        TIANGONG_API_KEY: undefined,
-        TIANGONG_LCA_APIKEY: undefined,
-        TIANGONG_REGION: undefined,
-        SUPABASE_FUNCTION_REGION: undefined,
+        TIANGONG_LCA_API_BASE_URL: undefined,
+        TIANGONG_LCA_API_KEY: undefined,
+        TIANGONG_LCA_REGION: undefined,
       }),
     );
 
@@ -259,12 +247,9 @@ test('executeCli surfaces missing admin API configuration after exhausting all f
     const result = await executeCli(
       ['admin', 'embedding-run', '--input', inputPath],
       makeDeps({
-        TIANGONG_API_BASE_URL: undefined,
-        SUPABASE_FUNCTIONS_URL: undefined,
-        TIANGONG_API_KEY: undefined,
-        TIANGONG_LCA_APIKEY: undefined,
-        TIANGONG_REGION: undefined,
-        SUPABASE_FUNCTION_REGION: undefined,
+        TIANGONG_LCA_API_BASE_URL: undefined,
+        TIANGONG_LCA_API_KEY: undefined,
+        TIANGONG_LCA_REGION: undefined,
       }),
     );
 

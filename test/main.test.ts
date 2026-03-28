@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { isDirectEntry, main, maybeRunFromProcess } from '../src/main.js';
 
-const integrationTest = process.env.TIANGONG_COVERAGE === '1' ? test.skip : test;
+const integrationTest = process.env.TIANGONG_LCA_COVERAGE === '1' ? test.skip : test;
 
 test('main writes stdout and stderr from CLI results', async () => {
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);
@@ -25,8 +25,8 @@ test('main writes stdout and stderr from CLI results', async () => {
 
   try {
     const exitCode = await main(['process', 'auto-build'], {
-      TIANGONG_API_BASE_URL: 'https://example.com/functions/v1',
-      TIANGONG_API_KEY: 'secret-token',
+      TIANGONG_LCA_API_BASE_URL: 'https://example.com/functions/v1',
+      TIANGONG_LCA_API_KEY: 'secret-token',
     });
 
     assert.equal(exitCode, 2);
@@ -55,8 +55,8 @@ test('main writes stdout for successful command results', async () => {
 
   try {
     const exitCode = await main(['doctor', '--json'], {
-      TIANGONG_API_BASE_URL: 'https://example.com/functions/v1',
-      TIANGONG_API_KEY: 'secret-token',
+      TIANGONG_LCA_API_BASE_URL: 'https://example.com/functions/v1',
+      TIANGONG_LCA_API_KEY: 'secret-token',
     });
 
     assert.equal(exitCode, 0);
@@ -82,8 +82,8 @@ test('maybeRunFromProcess returns null when not running as the entry module', as
   const exitCode = await maybeRunFromProcess(
     ['/usr/local/bin/node', '/tmp/other.ts', 'doctor', '--json'],
     {
-      TIANGONG_API_BASE_URL: 'https://example.com/functions/v1',
-      TIANGONG_API_KEY: 'secret-token',
+      TIANGONG_LCA_API_BASE_URL: 'https://example.com/functions/v1',
+      TIANGONG_LCA_API_KEY: 'secret-token',
     },
     'file:///tmp/main.ts',
   );
@@ -111,8 +111,8 @@ test('maybeRunFromProcess executes the CLI when running as the entry module', as
     const exitCode = await maybeRunFromProcess(
       ['/usr/local/bin/node', '/tmp/main.ts', 'doctor', '--json'],
       {
-        TIANGONG_API_BASE_URL: 'https://example.com/functions/v1',
-        TIANGONG_API_KEY: 'secret-token',
+        TIANGONG_LCA_API_BASE_URL: 'https://example.com/functions/v1',
+        TIANGONG_LCA_API_KEY: 'secret-token',
       },
       'file:///tmp/main.ts',
     );
@@ -135,7 +135,10 @@ integrationTest('bin entrypoint executes successfully in a child process', () =>
 
   writeFileSync(
     path.join(dir, '.env'),
-    ['TIANGONG_API_BASE_URL=https://example.com/functions/v1', 'TIANGONG_API_KEY=secret-token'].join('\n'),
+    [
+      'TIANGONG_LCA_API_BASE_URL=https://example.com/functions/v1',
+      'TIANGONG_LCA_API_KEY=secret-token',
+    ].join('\n'),
     'utf8',
   );
 
@@ -161,8 +164,8 @@ integrationTest('dist/main.js executes successfully when run directly in a child
     encoding: 'utf8',
     env: {
       ...process.env,
-      TIANGONG_API_BASE_URL: 'https://example.com/functions/v1',
-      TIANGONG_API_KEY: 'secret-token',
+      TIANGONG_LCA_API_BASE_URL: 'https://example.com/functions/v1',
+      TIANGONG_LCA_API_KEY: 'secret-token',
     },
   });
 

@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { buildDoctorReport } from './lib/env.js';
+import { buildDoctorReport, readRuntimeEnv } from './lib/env.js';
 import type { DotEnvLoadResult } from './lib/dotenv.js';
 import { CliError, toErrorPayload } from './lib/errors.js';
 import type { FetchLike } from './lib/http.js';
@@ -44,7 +44,7 @@ Commands:
   process    get | auto-build | resume-build | publish-build | batch-build
   job        get | wait | logs
   admin      embedding-run
-  doctor     show environment and migration alias resolution
+  doctor     show environment diagnostics
 
 Examples:
   tiangong doctor
@@ -75,9 +75,9 @@ Options:
   --input <file>   JSON request file
   --json           Print compact JSON
   --dry-run        Print the planned HTTP request without sending it
-  --api-key <key>  Override TIANGONG_API_KEY
-  --base-url <url> Override TIANGONG_API_BASE_URL
-  --region <name>  Override TIANGONG_REGION
+  --api-key <key>  Override TIANGONG_LCA_API_KEY
+  --base-url <url> Override TIANGONG_LCA_API_BASE_URL
+  --region <name>  Override TIANGONG_LCA_REGION
   --timeout-ms <n> Request timeout in milliseconds
   -h, --help
 `.trim();
@@ -91,18 +91,25 @@ Options:
   --input <file>   JSON request file
   --json           Print compact JSON
   --dry-run        Print the planned HTTP request without sending it
-  --api-key <key>  Override TIANGONG_API_KEY
-  --base-url <url> Override TIANGONG_API_BASE_URL
+  --api-key <key>  Override TIANGONG_LCA_API_KEY
+  --base-url <url> Override TIANGONG_LCA_API_BASE_URL
   --timeout-ms <n> Request timeout in milliseconds
   -h, --help
 `.trim();
 }
 
 function renderDoctorText(report: ReturnType<typeof buildDoctorReport>): string {
-  const lines = ['TianGong CLI doctor', `  .env loaded: ${report.loadedDotEnv ? `yes (${report.dotEnvKeysLoaded} keys)` : 'no'}`, `  .env path:   ${report.dotEnvPath}`, ''];
+  const lines = [
+    'TianGong CLI doctor',
+    `  .env loaded: ${report.loadedDotEnv ? `yes (${report.dotEnvKeysLoaded} keys)` : 'no'}`,
+    `  .env path:   ${report.dotEnvPath}`,
+    '',
+  ];
   for (const check of report.checks) {
     const status = check.present ? 'OK ' : 'MISS';
-    lines.push(`  [${status}] ${check.key} (${check.source})${check.required ? ' [required]' : ''}`);
+    lines.push(
+      `  [${status}] ${check.key} (${check.source})${check.required ? ' [required]' : ''}`,
+    );
   }
   if (!report.ok) {
     lines.push('', 'Missing required environment keys:');
@@ -165,9 +172,7 @@ function parseCommandLine(args: string[]): CommandDispatch {
   }
 
   const maybeSubcommand = args[index + 1];
-  const subcommand = maybeSubcommand && !maybeSubcommand.startsWith('-')
-    ? maybeSubcommand
-    : null;
+  const subcommand = maybeSubcommand && !maybeSubcommand.startsWith('-') ? maybeSubcommand : null;
   const commandArgs = args.slice(index + 1 + (subcommand ? 1 : 0));
 
   return {
@@ -270,6 +275,19 @@ function plannedCommand(command: string, subcommand?: string): CliResult {
   };
 }
 
+function resolveRemoteRuntime(
+  env: NodeJS.ProcessEnv,
+  overrides: Pick<ReturnType<typeof parseRemoteFlags>, 'apiBaseUrl' | 'apiKey' | 'region'>,
+) {
+  const runtimeEnv = readRuntimeEnv(env);
+
+  return {
+    apiBaseUrl: overrides.apiBaseUrl ?? runtimeEnv.apiBaseUrl,
+    apiKey: overrides.apiKey ?? runtimeEnv.apiKey,
+    region: overrides.region ?? runtimeEnv.region,
+  };
+}
+
 export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResult> {
   try {
     const { flags, command, subcommand, commandArgs } = parseCommandLine(argv);
@@ -305,27 +323,16 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
       if (remoteFlags.help) {
         return { exitCode: 0, stdout: `${getRemoteCommandHelp(commandKey)}\n`, stderr: '' };
       }
+      const runtime = resolveRemoteRuntime(deps.env, remoteFlags);
 
       return {
         exitCode: 0,
         stdout: await executeRemoteCommand({
           commandKey,
           inputPath: remoteFlags.inputPath,
-          apiBaseUrl:
-            remoteFlags.apiBaseUrl ??
-            deps.env.TIANGONG_API_BASE_URL ??
-            deps.env.SUPABASE_FUNCTIONS_URL ??
-            null,
-          apiKey:
-            remoteFlags.apiKey ??
-            deps.env.TIANGONG_API_KEY ??
-            deps.env.TIANGONG_LCA_APIKEY ??
-            null,
-          region:
-            remoteFlags.region ??
-            deps.env.TIANGONG_REGION ??
-            deps.env.SUPABASE_FUNCTION_REGION ??
-            'us-east-1',
+          apiBaseUrl: runtime.apiBaseUrl,
+          apiKey: runtime.apiKey,
+          region: runtime.region,
           timeoutMs: remoteFlags.timeoutMs,
           dryRun: remoteFlags.dryRun,
           compactJson: remoteFlags.json,
@@ -342,29 +349,22 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
     if (command === 'admin' && subcommand === 'embedding-run') {
       const remoteFlags = parseRemoteFlags(commandArgs);
       if (remoteFlags.help) {
-        return { exitCode: 0, stdout: `${getRemoteCommandHelp('admin:embedding-run')}\n`, stderr: '' };
+        return {
+          exitCode: 0,
+          stdout: `${getRemoteCommandHelp('admin:embedding-run')}\n`,
+          stderr: '',
+        };
       }
+      const runtime = resolveRemoteRuntime(deps.env, remoteFlags);
 
       return {
         exitCode: 0,
         stdout: await executeRemoteCommand({
           commandKey: 'admin:embedding-run',
           inputPath: remoteFlags.inputPath,
-          apiBaseUrl:
-            remoteFlags.apiBaseUrl ??
-            deps.env.TIANGONG_API_BASE_URL ??
-            deps.env.SUPABASE_FUNCTIONS_URL ??
-            null,
-          apiKey:
-            remoteFlags.apiKey ??
-            deps.env.TIANGONG_API_KEY ??
-            deps.env.TIANGONG_LCA_APIKEY ??
-            null,
-          region:
-            remoteFlags.region ??
-            deps.env.TIANGONG_REGION ??
-            deps.env.SUPABASE_FUNCTION_REGION ??
-            'us-east-1',
+          apiBaseUrl: runtime.apiBaseUrl,
+          apiKey: runtime.apiKey,
+          region: runtime.region,
           timeoutMs: remoteFlags.timeoutMs,
           dryRun: remoteFlags.dryRun,
           compactJson: remoteFlags.json,

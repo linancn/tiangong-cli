@@ -26,7 +26,14 @@ test('loadDotEnv loads missing keys and preserves existing keys', () => {
 
   writeFileSync(
     path.join(dir, '.env'),
-    ['FOO=bar', 'QUOTED="value"', "SINGLE='other'", 'KEEP_ME=overwritten', '# COMMENT', 'INVALID'].join('\n'),
+    [
+      'FOO=bar',
+      'QUOTED="value"',
+      "SINGLE='other'",
+      'KEEP_ME=overwritten',
+      '# COMMENT',
+      'INVALID',
+    ].join('\n'),
     'utf8',
   );
 

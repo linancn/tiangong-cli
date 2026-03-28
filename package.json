@@ -10,15 +10,28 @@
   "scripts": {
     "start": "npm run build && node ./bin/tiangong.js",
     "dev": "tsx watch src/main.ts",
-    "typecheck": "tsc --noEmit",
-    "lint": "npm run typecheck",
+    "typecheck": "npm run tsc",
+    "tsc": "tsc --noEmit",
+    "lint": "npm run lint:js && npm run lint:prettier && npm run tsc",
+    "lint-staged": "lint-staged",
+    "lint-staged:js": "eslint --ext .js,.jsx,.ts,.tsx ",
+    "lint:deprecated": "node ./scripts/lint-deprecated.cjs src test scripts",
+    "lint:js": "eslint --cache --ext .js,.jsx,.ts,.tsx,.cjs,.mjs --format=stylish ./src ./test ./scripts ./bin && npm run lint:deprecated",
+    "lint:prettier": "prettier --check \"{src,test,docs,scripts,bin}/**/*.{js,cjs,mjs,jsx,tsx,ts,md,json}\" \"*.{js,cjs,mjs,jsx,tsx,ts,md,json}\"",
+    "prettier": "prettier --write \"{src,test,docs,scripts,bin}/**/*.{js,cjs,mjs,jsx,tsx,ts,md,json}\" \"*.{js,cjs,mjs,jsx,tsx,ts,md,json}\"",
     "build": "tsc -p tsconfig.build.json",
     "prepare": "npm run build",
     "test": "npm run build && node --import tsx --test",
-    "test:coverage": "npm run build && TIANGONG_COVERAGE=1 c8 --reporter=text --reporter=text-summary --reporter=json-summary --report-dir coverage node --import tsx --test",
+    "test:coverage": "npm run build && TIANGONG_LCA_COVERAGE=1 c8 --reporter=text --reporter=text-summary --reporter=json-summary --report-dir coverage node --import tsx --test",
     "test:coverage:assert-full": "node ./dist/scripts/assert-full-coverage.js",
     "prepush:gate": "npm run lint && npm run test:coverage && npm run test:coverage:assert-full",
     "clean": "node --eval \"import('node:fs').then(({ rmSync }) => rmSync('dist', { recursive: true, force: true }))\""
+  },
+  "lint-staged": {
+    "**/*.{js,jsx,ts,tsx,cjs,mjs}": "npm run lint-staged:js --",
+    "**/*.{js,cjs,mjs,jsx,tsx,ts,md,json}": [
+      "prettier --write"
+    ]
   },
   "engines": {
     "node": ">=24 <25"
@@ -31,9 +44,15 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^24.5.2",
     "c8": "^11.0.0",
+    "eslint": "^10.1.0",
+    "globals": "^17.4.0",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.1",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.2"
   }
 }
