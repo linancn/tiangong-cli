@@ -66,20 +66,17 @@ test('executeCli returns doctor text and success status', async () => {
 });
 
 test('executeCli doctor text reports loaded dotenv metadata and missing keys', async () => {
-  const result = await executeCli(
-    ['doctor'],
-    {
-      env: {
-        OPENAI_API_KEY: 'secret',
-      } as NodeJS.ProcessEnv,
-      dotEnvStatus: {
-        loaded: true,
-        path: '/tmp/.env',
-        count: 1,
-      },
-      fetchImpl: makeDeps().fetchImpl,
+  const result = await executeCli(['doctor'], {
+    env: {
+      OPENAI_API_KEY: 'secret',
+    } as NodeJS.ProcessEnv,
+    dotEnvStatus: {
+      loaded: true,
+      path: '/tmp/.env',
+      count: 1,
     },
-  );
+    fetchImpl: makeDeps().fetchImpl,
+  });
 
   assert.equal(result.exitCode, 1);
   assert.match(result.stdout, /\.env loaded: yes \(1 keys\)/u);

@@ -24,11 +24,14 @@ The bin entrypoint is `bin/tiangong.js`, and `npm start -- ...` dogfoods the sam
 
 The repository enforces:
 
+- `npm run lint`
 - `npm run typecheck`
 - `npm test`
 - `npm run test:coverage`
 - `npm run test:coverage:assert-full`
 - `npm run prepush:gate`
+
+Here `npm run lint` means `prettier check + deprecated API scan + typecheck`.
 
 Coverage is enforced at 100% for `src/**/*.ts`. Launcher smoke tests remain in the normal test suite.
 

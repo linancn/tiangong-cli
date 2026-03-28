@@ -36,13 +36,13 @@ tiangong
 
 对应关系：
 
-| CLI 命令 | 当前后端能力 |
-| --- | --- |
-| `tiangong doctor` | 本地环境诊断、`.env` 加载、旧变量 alias 检查 |
-| `tiangong search flow` | `flow_hybrid_search` |
-| `tiangong search process` | `process_hybrid_search` |
-| `tiangong search lifecyclemodel` | `lifecyclemodel_hybrid_search` |
-| `tiangong admin embedding-run` | `embedding_ft` |
+| CLI 命令                         | 当前后端能力                                 |
+| -------------------------------- | -------------------------------------------- |
+| `tiangong doctor`                | 本地环境诊断、`.env` 加载、旧变量 alias 检查 |
+| `tiangong search flow`           | `flow_hybrid_search`                         |
+| `tiangong search process`        | `process_hybrid_search`                      |
+| `tiangong search lifecyclemodel` | `lifecyclemodel_hybrid_search`               |
+| `tiangong admin embedding-run`   | `embedding_ft`                               |
 
 ### 2.2 已经固定的工程约束
 
@@ -174,12 +174,17 @@ CLI 当前兼容旧变量名：
 ### 6.1 当前质量门
 
 ```bash
+npm run lint
 npm run typecheck
 npm test
 npm run test:coverage
 npm run test:coverage:assert-full
 npm run prepush:gate
 ```
+
+其中：
+
+- `npm run lint` = `prettier 检查 + deprecated API 扫描 + typecheck`
 
 ### 6.2 为什么覆盖率门只卡 `src/**/*.ts`
 
@@ -209,12 +214,12 @@ npm run prepush:gate
 
 最适合先迁移到统一 CLI 的，是当前的薄远程 skill：
 
-| 当前 skill | 目标 CLI |
-| --- | --- |
-| `flow-hybrid-search` | `tiangong search flow` |
-| `process-hybrid-search` | `tiangong search process` |
+| 当前 skill                     | 目标 CLI                         |
+| ------------------------------ | -------------------------------- |
+| `flow-hybrid-search`           | `tiangong search flow`           |
+| `process-hybrid-search`        | `tiangong search process`        |
 | `lifecyclemodel-hybrid-search` | `tiangong search lifecyclemodel` |
-| `embedding-ft` | `tiangong admin embedding-run` |
+| `embedding-ft`                 | `tiangong admin embedding-run`   |
 
 ### 7.3 暂不全量重写的对象
 
@@ -277,5 +282,4 @@ npm run prepush:gate
 
 如果后续继续扩能力，也必须遵守同一条原则：
 
-先判断它是不是稳定的业务动作，
-再决定它是不是应该进入 `tiangong` 命令树。
+先判断它是不是稳定的业务动作，再决定它是不是应该进入 `tiangong` 命令树。

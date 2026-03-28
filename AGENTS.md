@@ -32,7 +32,7 @@ npm run build
 
 Notes:
 
-- `npm run lint` is currently the required local syntax / type gate.
+- `npm run lint` now means `prettier check + deprecated API scan + typecheck`.
 - `npm run test:coverage` enforces `100%` coverage for `src/**/*.ts`.
 - `npm run test:coverage:assert-full` verifies the latest coverage artifact without rerunning coverage.
 - `npm run prepush:gate` is the full local push gate: `lint + full coverage + strict 100% assertion`.

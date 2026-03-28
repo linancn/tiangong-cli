@@ -135,7 +135,10 @@ integrationTest('bin entrypoint executes successfully in a child process', () =>
 
   writeFileSync(
     path.join(dir, '.env'),
-    ['TIANGONG_API_BASE_URL=https://example.com/functions/v1', 'TIANGONG_API_KEY=secret-token'].join('\n'),
+    [
+      'TIANGONG_API_BASE_URL=https://example.com/functions/v1',
+      'TIANGONG_API_KEY=secret-token',
+    ].join('\n'),
     'utf8',
   );
 

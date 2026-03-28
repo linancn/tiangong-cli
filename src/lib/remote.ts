@@ -48,7 +48,11 @@ function buildUrl(baseUrl: string, endpoint: string): string {
   return `${baseUrl.replace(/\/+$/u, '')}/${endpoint}`;
 }
 
-function buildHeaders(apiKey: string, includeRegion: boolean, region: string | null): Record<string, string> {
+function buildHeaders(
+  apiKey: string,
+  includeRegion: boolean,
+  region: string | null,
+): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
@@ -69,10 +73,13 @@ export async function executeRemoteCommand(options: RemoteCommandOptions): Promi
   }
 
   if (!options.apiBaseUrl) {
-    throw new CliError('Missing API base URL. Set TIANGONG_API_BASE_URL or SUPABASE_FUNCTIONS_URL.', {
-      code: 'API_BASE_URL_REQUIRED',
-      exitCode: 2,
-    });
+    throw new CliError(
+      'Missing API base URL. Set TIANGONG_API_BASE_URL or SUPABASE_FUNCTIONS_URL.',
+      {
+        code: 'API_BASE_URL_REQUIRED',
+        exitCode: 2,
+      },
+    );
   }
 
   if (!options.apiKey) {

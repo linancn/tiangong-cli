@@ -28,13 +28,16 @@ test('toErrorPayload handles CliError, Error, and unknown values', () => {
     },
   });
 
-  assert.deepEqual(toErrorPayload(new CliError('boom', { code: 'DEMO', details: { reason: 'x' } })), {
-    error: {
-      code: 'DEMO',
-      message: 'boom',
-      details: { reason: 'x' },
+  assert.deepEqual(
+    toErrorPayload(new CliError('boom', { code: 'DEMO', details: { reason: 'x' } })),
+    {
+      error: {
+        code: 'DEMO',
+        message: 'boom',
+        details: { reason: 'x' },
+      },
     },
-  });
+  );
 
   assert.deepEqual(toErrorPayload(new Error('bad')), {
     error: {

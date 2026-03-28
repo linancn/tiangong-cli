@@ -96,6 +96,7 @@ npm run prepush:gate
 
 说明：
 
+- `npm run lint` 的含义是：`prettier 检查 + deprecated API 扫描 + typecheck`
 - `npm test` 包含普通单元测试和 `bin` / 入口 smoke test
 - `npm run test:coverage` 对 `src/**/*.ts` 执行 100% 覆盖率门
 - `npm run prepush:gate` 是提交前的完整质量门

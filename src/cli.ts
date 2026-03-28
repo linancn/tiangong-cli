@@ -99,10 +99,17 @@ Options:
 }
 
 function renderDoctorText(report: ReturnType<typeof buildDoctorReport>): string {
-  const lines = ['TianGong CLI doctor', `  .env loaded: ${report.loadedDotEnv ? `yes (${report.dotEnvKeysLoaded} keys)` : 'no'}`, `  .env path:   ${report.dotEnvPath}`, ''];
+  const lines = [
+    'TianGong CLI doctor',
+    `  .env loaded: ${report.loadedDotEnv ? `yes (${report.dotEnvKeysLoaded} keys)` : 'no'}`,
+    `  .env path:   ${report.dotEnvPath}`,
+    '',
+  ];
   for (const check of report.checks) {
     const status = check.present ? 'OK ' : 'MISS';
-    lines.push(`  [${status}] ${check.key} (${check.source})${check.required ? ' [required]' : ''}`);
+    lines.push(
+      `  [${status}] ${check.key} (${check.source})${check.required ? ' [required]' : ''}`,
+    );
   }
   if (!report.ok) {
     lines.push('', 'Missing required environment keys:');
@@ -165,9 +172,7 @@ function parseCommandLine(args: string[]): CommandDispatch {
   }
 
   const maybeSubcommand = args[index + 1];
-  const subcommand = maybeSubcommand && !maybeSubcommand.startsWith('-')
-    ? maybeSubcommand
-    : null;
+  const subcommand = maybeSubcommand && !maybeSubcommand.startsWith('-') ? maybeSubcommand : null;
   const commandArgs = args.slice(index + 1 + (subcommand ? 1 : 0));
 
   return {
@@ -317,10 +322,7 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
             deps.env.SUPABASE_FUNCTIONS_URL ??
             null,
           apiKey:
-            remoteFlags.apiKey ??
-            deps.env.TIANGONG_API_KEY ??
-            deps.env.TIANGONG_LCA_APIKEY ??
-            null,
+            remoteFlags.apiKey ?? deps.env.TIANGONG_API_KEY ?? deps.env.TIANGONG_LCA_APIKEY ?? null,
           region:
             remoteFlags.region ??
             deps.env.TIANGONG_REGION ??
@@ -342,7 +344,11 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
     if (command === 'admin' && subcommand === 'embedding-run') {
       const remoteFlags = parseRemoteFlags(commandArgs);
       if (remoteFlags.help) {
-        return { exitCode: 0, stdout: `${getRemoteCommandHelp('admin:embedding-run')}\n`, stderr: '' };
+        return {
+          exitCode: 0,
+          stdout: `${getRemoteCommandHelp('admin:embedding-run')}\n`,
+          stderr: '',
+        };
       }
 
       return {
@@ -356,10 +362,7 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
             deps.env.SUPABASE_FUNCTIONS_URL ??
             null,
           apiKey:
-            remoteFlags.apiKey ??
-            deps.env.TIANGONG_API_KEY ??
-            deps.env.TIANGONG_LCA_APIKEY ??
-            null,
+            remoteFlags.apiKey ?? deps.env.TIANGONG_API_KEY ?? deps.env.TIANGONG_LCA_APIKEY ?? null,
           region:
             remoteFlags.region ??
             deps.env.TIANGONG_REGION ??
