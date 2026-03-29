@@ -37,6 +37,7 @@ test('executeCli prints main help when no command is given', async () => {
   assert.match(result.stdout, /Unified TianGong command entrypoint/u);
   assert.match(result.stdout, /Implemented Commands:/u);
   assert.match(result.stdout, /Planned Surface \(not implemented yet\):/u);
+  assert.match(result.stdout, /process\s+get \| auto-build/u);
   assert.match(result.stdout, /process\s+auto-build/u);
   assert.match(result.stdout, /lifecyclemodel build-resulting-process/u);
   assert.match(result.stdout, /publish-resulting-process/u);
@@ -164,6 +165,8 @@ test('executeCli returns help for the lifecyclemodel namespace and implemented s
   );
   assert.equal(buildHelp.exitCode, 0);
   assert.match(buildHelp.stdout, /tiangong lifecyclemodel build-resulting-process --input <file>/u);
+  assert.match(buildHelp.stdout, /TIANGONG_LCA_API_BASE_URL/u);
+  assert.match(buildHelp.stdout, /TIANGONG_LCA_API_KEY/u);
   assert.doesNotMatch(buildHelp.stdout, /Planned command/u);
 
   const publishHelp = await executeCli(
@@ -183,10 +186,18 @@ test('executeCli returns help for the process namespace and implemented subcomma
   const processHelp = await executeCli(['process'], makeDeps());
   assert.equal(processHelp.exitCode, 0);
   assert.match(processHelp.stdout, /tiangong process <subcommand>/u);
+  assert.match(processHelp.stdout, /get/u);
   assert.match(processHelp.stdout, /auto-build/u);
   assert.match(processHelp.stdout, /resume-build/u);
   assert.match(processHelp.stdout, /publish-build/u);
   assert.match(processHelp.stdout, /batch-build/u);
+
+  const getHelp = await executeCli(['process', 'get', '--help'], makeDeps());
+  assert.equal(getHelp.exitCode, 0);
+  assert.match(getHelp.stdout, /tiangong process get --id <process-id>/u);
+  assert.match(getHelp.stdout, /TIANGONG_LCA_API_BASE_URL/u);
+  assert.match(getHelp.stdout, /TIANGONG_LCA_API_KEY/u);
+  assert.doesNotMatch(getHelp.stdout, /Planned command/u);
 
   const autoBuildHelp = await executeCli(['process', 'auto-build', '--help'], makeDeps());
   assert.equal(autoBuildHelp.exitCode, 0);
@@ -223,6 +234,10 @@ test('executeCli executes lifecyclemodel build-resulting-process with injected i
   const dir = mkdtempSync(path.join(os.tmpdir(), 'tg-cli-lifecyclemodel-cli-'));
   const inputPath = path.join(dir, 'request.json');
   writeFileSync(inputPath, '{"source_model":{"json_ordered_path":"./model.json"}}', 'utf8');
+  const deps = makeDeps({
+    TIANGONG_LCA_API_BASE_URL: 'https://supabase.example/functions/v1',
+    TIANGONG_LCA_API_KEY: 'supabase-api-key',
+  });
 
   try {
     const result = await executeCli(
@@ -236,10 +251,12 @@ test('executeCli executes lifecyclemodel build-resulting-process with injected i
         './out',
       ],
       {
-        ...makeDeps(),
+        ...deps,
         runLifecyclemodelBuildResultingProcessImpl: async (options) => {
           assert.equal(options.inputPath, inputPath);
           assert.equal(options.outDir, './out');
+          assert.equal(options.env, deps.env);
+          assert.equal(options.fetchImpl, deps.fetchImpl);
           return {
             generated_at_utc: '2026-03-29T00:00:00.000Z',
             request_path: inputPath,
@@ -274,6 +291,40 @@ test('executeCli executes lifecyclemodel build-resulting-process with injected i
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('executeCli executes process get with injected implementation', async () => {
+  const deps = makeDeps({
+    TIANGONG_LCA_API_BASE_URL: 'https://supabase.example/functions/v1',
+    TIANGONG_LCA_API_KEY: 'supabase-api-key',
+  });
+
+  const result = await executeCli(['process', 'get', '--id', 'proc-1', '--version', '00.00.001'], {
+    ...deps,
+    runProcessGetImpl: async (options) => {
+      assert.equal(options.processId, 'proc-1');
+      assert.equal(options.version, '00.00.001');
+      assert.equal(options.env, deps.env);
+      assert.equal(options.fetchImpl, deps.fetchImpl);
+      return {
+        schema_version: 1,
+        generated_at_utc: '2026-03-30T00:00:00.000Z',
+        status: 'resolved_remote_process',
+        process_id: 'proc-1',
+        requested_version: '00.00.001',
+        resolved_version: '00.00.001',
+        resolution: 'remote_supabase_exact',
+        source_url: 'https://supabase.example/rest/v1/processes?id=eq.proc-1',
+        modified_at: null,
+        state_code: 100,
+        process: { processDataSet: { id: 'proc-1' } },
+      };
+    },
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /"status": "resolved_remote_process"/u);
+  assert.equal(result.stderr, '');
 });
 
 test('executeCli executes lifecyclemodel publish-resulting-process with injected implementation', async () => {
@@ -1066,7 +1117,7 @@ test('executeCli returns parsing errors for invalid publish and validation flags
   assert.match(validationResult.stderr, /INVALID_ARGS/u);
 });
 
-test('executeCli returns parsing errors for invalid lifecyclemodel build, process build, resume, publish-build, and batch-build flags', async () => {
+test('executeCli returns parsing errors for invalid lifecyclemodel build, process get/build, resume, publish-build, and batch-build flags', async () => {
   const result = await executeCli(
     ['lifecyclemodel', 'build-resulting-process', '--bad-flag'],
     makeDeps(),
@@ -1082,6 +1133,11 @@ test('executeCli returns parsing errors for invalid lifecyclemodel build, proces
   assert.equal(publishResult.exitCode, 2);
   assert.equal(publishResult.stdout, '');
   assert.match(publishResult.stderr, /INVALID_ARGS/u);
+
+  const processGetResult = await executeCli(['process', 'get', '--bad-flag'], makeDeps());
+  assert.equal(processGetResult.exitCode, 2);
+  assert.equal(processGetResult.stdout, '');
+  assert.match(processGetResult.stderr, /INVALID_ARGS/u);
 
   const processResult = await executeCli(['process', 'auto-build', '--bad-flag'], makeDeps());
   assert.equal(processResult.exitCode, 2);
@@ -1231,11 +1287,11 @@ test('executeCli returns planned command message for lifecyclemodel subcommands 
   assert.match(result.stderr, /Command 'lifecyclemodel auto-build'/u);
 });
 
-test('executeCli returns planned command message for process subcommands after help is introduced', async () => {
-  const result = await executeCli(['process', 'get'], makeDeps());
+test('executeCli returns planned command message for other unimplemented process subcommands', async () => {
+  const result = await executeCli(['process', 'list'], makeDeps());
   assert.equal(result.exitCode, 2);
   assert.equal(result.stdout, '');
-  assert.match(result.stderr, /Command 'process get'/u);
+  assert.match(result.stderr, /Command 'process list'/u);
 });
 
 test('executeCli returns dedicated help for planned lifecyclemodel subcommands', async () => {
@@ -1243,14 +1299,6 @@ test('executeCli returns dedicated help for planned lifecyclemodel subcommands',
   assert.equal(result.exitCode, 0);
   assert.match(result.stdout, /Planned contract:/u);
   assert.match(result.stdout, /discover candidate processes/u);
-  assert.equal(result.stderr, '');
-});
-
-test('executeCli returns dedicated help for planned process subcommands', async () => {
-  const result = await executeCli(['process', 'get', '--help'], makeDeps());
-  assert.equal(result.exitCode, 0);
-  assert.match(result.stdout, /tiangong process get --id <process-id>/u);
-  assert.match(result.stdout, /Execution is not implemented yet/u);
   assert.equal(result.stderr, '');
 });
 

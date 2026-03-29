@@ -20,6 +20,11 @@ import {
   type RunProcessAutoBuildOptions,
 } from './lib/process-auto-build.js';
 import {
+  runProcessGet,
+  type ProcessGetReport,
+  type RunProcessGetOptions,
+} from './lib/process-get.js';
+import {
   runProcessBatchBuild,
   type ProcessBatchBuildReport,
   type RunProcessBatchBuildOptions,
@@ -54,6 +59,7 @@ export type CliDeps = {
   runLifecyclemodelPublishResultingProcessImpl?: (
     options: RunLifecyclemodelPublishResultingProcessOptions,
   ) => Promise<LifecyclemodelPublishResultingProcessReport>;
+  runProcessGetImpl?: (options: RunProcessGetOptions) => Promise<ProcessGetReport>;
   runProcessAutoBuildImpl?: (
     options: RunProcessAutoBuildOptions,
   ) => Promise<ProcessAutoBuildReport>;
@@ -97,7 +103,7 @@ Commands:
 Implemented Commands:
   doctor     show environment diagnostics
   search     flow | process | lifecyclemodel
-  process    auto-build | resume-build | publish-build | batch-build
+  process    get | auto-build | resume-build | publish-build | batch-build
   lifecyclemodel build-resulting-process | publish-resulting-process
   publish    run
   validation run
@@ -108,7 +114,6 @@ Planned Surface (not implemented yet):
   lifecyclemodel auto-build | validate-build | publish-build
   review     flow | process
   flow       get | list | remediate | publish-version | regen-product
-  process    get
   job        get | wait | logs
 
 Planned commands currently print an explicit "not implemented yet" message and exit with code 2.
@@ -117,6 +122,7 @@ Examples:
   tiangong doctor
   tiangong search flow --input ./request.json
   tiangong search process --input ./request.json --dry-run
+  tiangong process get --id <process-id>
   tiangong process auto-build --input ./pff-request.json
   tiangong process resume-build --run-id <id>
   tiangong process publish-build --run-id <id>
@@ -207,6 +213,10 @@ Options:
   --out-dir <dir>    Override the default artifact output directory
   --json             Print compact JSON
   -h, --help
+
+Remote lookup env (only when process_sources.allow_remote_lookup=true):
+  TIANGONG_LCA_API_BASE_URL
+  TIANGONG_LCA_API_KEY
 `.trim();
 }
 
@@ -255,6 +265,25 @@ Options:
 `.trim();
 }
 
+function renderProcessGetHelp(): string {
+  return `Usage:
+  tiangong process get --id <process-id> [options]
+
+Options:
+  --id <process-id>    Process UUID
+  --version <version>  Optional requested dataset version; if absent or missing, the latest reachable row is returned
+  --json               Print compact JSON
+  -h, --help
+
+Required env:
+  TIANGONG_LCA_API_BASE_URL
+  TIANGONG_LCA_API_KEY
+
+Runtime note:
+  The CLI derives a direct Supabase REST read path from TIANGONG_LCA_API_BASE_URL.
+`.trim();
+}
+
 function renderProcessResumeBuildHelp(): string {
   return `Usage:
   tiangong process resume-build [--run-id <id>] [--run-dir <dir>] [options]
@@ -296,16 +325,15 @@ function renderProcessHelp(): string {
   tiangong process <subcommand> [options]
 
 Implemented Subcommands:
+  get          Load one process dataset by identifier through direct Supabase REST
   auto-build   Prepare a local process-from-flow run scaffold and artifact workspace
   resume-build Prepare a local resume handoff from one existing process build run
   publish-build Prepare publish handoff artifacts from one existing process build run
   batch-build  Run multiple process auto-build requests through one batch-oriented CLI surface
 
-Planned Subcommands:
-  get          Load one process dataset or process build run summary
-
 Examples:
   tiangong process --help
+  tiangong process get --id <process-id>
   tiangong process auto-build --help
   tiangong process resume-build --run-id <id> --help
   tiangong process publish-build --run-id <id> --help
@@ -349,40 +377,12 @@ Status:
 `.trim(),
 } as const;
 
-const processPlannedHelp = {
-  get: `Usage:
-  tiangong process get --id <process-id> [options]
-
-Planned contract:
-  - load one process dataset or process build run summary by identifier
-  - keep read-only access distinct from build/publish workflows
-
-Status:
-  Planned command. Execution is not implemented yet.
-`.trim(),
-  'batch-build': `Usage:
-  tiangong process batch-build --input <file> [options]
-
-Planned contract:
-  - process multiple process auto-build requests from one batch manifest
-  - preserve isolated run directories and state locks per request
-
-Status:
-  Planned command. Execution is not implemented yet.
-`.trim(),
-} as const;
-
 type LifecyclemodelPlannedSubcommand = keyof typeof lifecyclemodelPlannedHelp;
-type ProcessPlannedSubcommand = keyof typeof processPlannedHelp;
 
 function isLifecyclemodelPlannedSubcommand(
   value: string | null,
 ): value is LifecyclemodelPlannedSubcommand {
   return Boolean(value && value in lifecyclemodelPlannedHelp);
-}
-
-function isProcessPlannedSubcommand(value: string | null): value is ProcessPlannedSubcommand {
-  return Boolean(value && value in processPlannedHelp);
 }
 
 function renderDoctorText(report: ReturnType<typeof buildDoctorReport>): string {
@@ -740,6 +740,40 @@ function parseProcessAutoBuildFlags(args: string[]): {
   };
 }
 
+function parseProcessGetFlags(args: string[]): {
+  help: boolean;
+  json: boolean;
+  processId: string;
+  version: string | null;
+} {
+  let values: ReturnType<typeof parseArgs>['values'];
+  try {
+    ({ values } = parseArgs({
+      args,
+      allowPositionals: false,
+      strict: true,
+      options: {
+        help: { type: 'boolean', short: 'h' },
+        json: { type: 'boolean' },
+        id: { type: 'string' },
+        version: { type: 'string' },
+      },
+    }));
+  } catch (error) {
+    throw new CliError(String(error), {
+      code: 'INVALID_ARGS',
+      exitCode: 2,
+    });
+  }
+
+  return {
+    help: Boolean(values.help),
+    json: Boolean(values.json),
+    processId: typeof values.id === 'string' ? values.id : '',
+    version: typeof values.version === 'string' ? values.version : null,
+  };
+}
+
 function parseProcessResumeBuildFlags(args: string[]): {
   help: boolean;
   json: boolean;
@@ -873,6 +907,7 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
       deps.runLifecyclemodelBuildResultingProcessImpl ?? runLifecyclemodelBuildResultingProcess;
     const lifecyclemodelPublishImpl =
       deps.runLifecyclemodelPublishResultingProcessImpl ?? runLifecyclemodelPublishResultingProcess;
+    const processGetImpl = deps.runProcessGetImpl ?? runProcessGet;
     const processAutoBuildImpl = deps.runProcessAutoBuildImpl ?? runProcessAutoBuild;
     const processBatchBuildImpl = deps.runProcessBatchBuildImpl ?? runProcessBatchBuild;
     const processResumeBuildImpl = deps.runProcessResumeBuildImpl ?? runProcessResumeBuild;
@@ -945,6 +980,8 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
       const report = await lifecyclemodelBuildImpl({
         inputPath: lifecyclemodelFlags.inputPath,
         outDir: lifecyclemodelFlags.outDir,
+        env: deps.env,
+        fetchImpl: deps.fetchImpl,
       });
 
       return {
@@ -990,6 +1027,30 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
 
     if (command === 'process' && !subcommand) {
       return { exitCode: 0, stdout: `${renderProcessHelp()}\n`, stderr: '' };
+    }
+
+    if (command === 'process' && subcommand === 'get') {
+      const processFlags = parseProcessGetFlags(commandArgs);
+      if (processFlags.help) {
+        return {
+          exitCode: 0,
+          stdout: `${renderProcessGetHelp()}\n`,
+          stderr: '',
+        };
+      }
+
+      const report = await processGetImpl({
+        processId: processFlags.processId,
+        version: processFlags.version,
+        env: deps.env,
+        fetchImpl: deps.fetchImpl,
+      });
+
+      return {
+        exitCode: 0,
+        stdout: stringifyJson(report, processFlags.json),
+        stderr: '',
+      };
     }
 
     if (command === 'process' && subcommand === 'auto-build') {
@@ -1078,17 +1139,6 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
         stdout: stringifyJson(report, processFlags.json),
         stderr: '',
       };
-    }
-
-    if (command === 'process' && isProcessPlannedSubcommand(subcommand)) {
-      if (commandArgs.includes('--help') || commandArgs.includes('-h')) {
-        return {
-          exitCode: 0,
-          stdout: `${processPlannedHelp[subcommand]}\n`,
-          stderr: '',
-        };
-      }
-      return plannedCommand(command, subcommand);
     }
 
     if (command === 'admin' && !subcommand && commandArgs.includes('--help')) {

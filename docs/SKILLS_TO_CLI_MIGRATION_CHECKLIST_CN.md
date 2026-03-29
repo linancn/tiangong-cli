@@ -72,7 +72,7 @@
 | `embedding-ft` | 已完成 CLI 收口 | Node wrapper -> `tiangong admin embedding-run`，shell 仅兼容壳 | 只保留 skill 文档，调用 `tiangong admin embedding-run` | P0 |
 | `process-automated-builder` | 已进入 CLI 化，6.1/6.2/6.3/6.4 已落地，skills#15 已把 canonical wrapper 改为 Node -> CLI | `node wrapper -> tiangong process auto-build | resume-build | publish-build | batch-build` + Python/LangGraph/MCP/OpenAI/AI edge search/TianGong unstructured 遗留阶段 | 迁成 `tiangong process ...` 主链，并持续缩小 legacy 路径 | P1 |
 | `lifecyclemodel-automated-builder` | 仍是重 workflow | shell + Python + MCP + OpenAI | 迁成 `tiangong lifecyclemodel ...` 主链 | P1 |
-| `lifecyclemodel-resulting-process-builder` | CLI 本地 build/publish handoff 已落地，Node wrapper 已切换 | `node wrapper -> tiangong lifecyclemodel build/publish-resulting-process` | 保持薄 wrapper，继续去掉遗留 lookup 分支 | P1 |
+| `lifecyclemodel-resulting-process-builder` | CLI 本地 build/publish handoff + direct REST lookup 已落地，Node wrapper 已切换 | `node wrapper -> tiangong lifecyclemodel build/publish-resulting-process` | 保持薄 wrapper，作为 lifecyclemodel CLI 化参考模板 | P1 |
 | `lifecycleinventory-review` | 仍是 review workflow | Python review script | 迁成 `tiangong review process` | P2 |
 | `flow-governance-review` | 仍是治理 workflow | shell + 多个 Python helper + 可选 MCP | 迁成 `tiangong flow ...` / `tiangong review flow` | P2 |
 | `lifecyclemodel-recursive-orchestrator` | 仍是 orchestrator | Python orchestrator，串联多个技能 | 迁成 CLI 编排命令 | P3 |
@@ -83,7 +83,7 @@
 当前 workspace 的状态已经进一步推进，但重逻辑仍未完全离开 skills / Python 层：
 
 - `flow-hybrid-search`、`process-hybrid-search`、`lifecyclemodel-hybrid-search`、`embedding-ft` 已切成 Node wrapper -> CLI，并完成了一轮 dry-run smoke check；这批技能已经不再以 Bash 作为 canonical path。
-- `lifecyclemodel-resulting-process-builder` 已切成 Node wrapper -> CLI，shell 仅保留兼容壳，但远端 lookup 仍然是 fail-fast / 未实现状态。[`tiangong-lca-cli/src/lib/lifecyclemodel-resulting-process.ts`](../src/lib/lifecyclemodel-resulting-process.ts)
+- `lifecyclemodel-resulting-process-builder` 已切成 Node wrapper -> CLI，shell 仅保留兼容壳；远端 lookup 现在也已经收口到 CLI 的 deterministic direct-read 路径。[`tiangong-lca-cli/src/lib/lifecyclemodel-resulting-process.ts`](../src/lib/lifecyclemodel-resulting-process.ts)
 - `process-automated-builder` 的技能文档和 canonical wrapper 已切到 Node -> CLI，但其剩余 LangGraph/Python 阶段和运行时配置代码仍然存在，且仍围绕 MCP / OpenAI / KB / TianGong unstructured 组织。[`tiangong-lca-skills/process-automated-builder/tiangong_lca_spec/core/config.py`](../../tiangong-lca-skills/process-automated-builder/tiangong_lca_spec/core/config.py)
 - `lifecyclemodel-automated-builder` 仍是 Python 脚本 + MCP/OpenAI 路径。[`tiangong-lca-skills/lifecyclemodel-automated-builder/SKILL.md`](../../tiangong-lca-skills/lifecyclemodel-automated-builder/SKILL.md)
 
@@ -203,7 +203,7 @@ ToDo：
 
 - `tiangong lifecyclemodel build-resulting-process` 已在 CLI 中落地，且通过 `npm run prepush:gate`
 - `tiangong lifecyclemodel publish-resulting-process` 已在 CLI 中落地，且通过 `npm run prepush:gate`
-- 仍未完成 skill wrapper 收口、旧 Python 主入口删除、远程 lookup 收口
+- 仍未完成 skill wrapper 文档面收口和更上层 workflow 迁移，但远程 lookup 已不再是 CLI 阻塞项
 
 目标命令：
 
@@ -216,7 +216,7 @@ ToDo：
 - [x] 将 lifecycle model 读取、拓扑解析、聚合投影逻辑迁到 TS
 - [x] 将 process catalog / local run 解析改为复用 CLI 模块
 - [x] 将 resulting-process publish handoff 生成迁到 TS CLI
-- [ ] 将远程 process lookup 从可选 MCP lookup 改为直接 REST 查询
+- [x] 将远程 process lookup 从可选 MCP lookup 改为直接 REST 查询
 - [ ] 保留 `publish-bundle.json` 契约，但发布入口统一走 CLI publish
 - [x] skill wrapper 改为只调用 CLI
 - [x] 删除 Python build / publish 主入口
@@ -231,7 +231,7 @@ ToDo：
 完成定义：
 
 - [x] 这个 skill 不再需要 Python builder
-- [ ] 这个 skill 不再需要 MCP lookup
+- [x] 这个 skill 不再需要 MCP lookup
 - [x] 这个 skill 成为后续其它重 workflow CLI 化的参考模板
 
 ### Phase 5：收口 publish / validation，清掉交付层并行实现
@@ -437,19 +437,19 @@ ToDo：
 当前已经完成：
 
 1. `tiangong process auto-build` / `resume-build` / `publish-build` / `batch-build`（Phase 6.1 / 6.2 / 6.3 / 6.4）。
-2. `tiangong lifecyclemodel build-resulting-process` / `publish-resulting-process` 子命令落地。
-3. `tiangong publish run` 与 `tiangong validation run` 作为统一契约边界落地。
-4. thin remote skills 已切为 Node wrapper -> CLI，并完成一轮 smoke check。
-5. `process-automated-builder` canonical wrapper 已切为 Node -> CLI；`run-process-automated-builder.sh` 已降为兼容壳。
+2. `tiangong process get` 已落地，并成为 lifecyclemodel resulting-process / 后续 review/governance 迁移可复用的只读远端 process 详情面。
+3. `tiangong lifecyclemodel build-resulting-process` / `publish-resulting-process` 子命令落地。
+4. `tiangong publish run` 与 `tiangong validation run` 作为统一契约边界落地。
+5. thin remote skills 已切为 Node wrapper -> CLI，并完成一轮 smoke check。
+6. `process-automated-builder` canonical wrapper 已切为 Node -> CLI；`run-process-automated-builder.sh` 已降为兼容壳。
 
-下一轮建议严格做这 6 件事（从当前状态继续推进）：
+下一轮建议严格做这 5 件事（从当前状态继续推进）：
 
-1. 为 `lifecyclemodel-resulting-process-builder` 收掉剩余可选远端 lookup 分支，固定为 REST 路径。
-2. 完成 `lifecyclemodel-automated-builder` 的 CLI 子命令切片设计（`auto-build` / `validate-build` / `publish-build`）。
-3. 让 review/governance 进入 CLI 命令树（至少固化 `tiangong review ...` 目标 contract）。
-4. 明确 publish commit 的唯一执行边界：`tiangong publish run` executor，不回流到 skill 私有实现。
-5. 继续迁掉 `process-automated-builder` 剩余 LangGraph/Python 阶段，而不是只停在 local handoff wrapper。
-6. 每个里程碑 merge 后，回到 `lca-workspace` 做子模块指针 bump。
+1. 完成 `lifecyclemodel-automated-builder` 的 CLI 子命令切片设计（`auto-build` / `validate-build` / `publish-build`）。
+2. 让 review/governance 进入 CLI 命令树（至少固化 `tiangong review ...` 目标 contract）。
+3. 明确 publish commit 的唯一执行边界：`tiangong publish run` executor，不回流到 skill 私有实现。
+4. 继续迁掉 `process-automated-builder` 剩余 LangGraph/Python 阶段，而不是只停在 local handoff wrapper。
+5. 每个里程碑 merge 后，回到 `lca-workspace` 做子模块指针 bump。
 
 ## 10. 不应该做的事
 

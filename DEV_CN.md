@@ -14,7 +14,7 @@
 统一 CLI 不再引入 MCP 作为内部传输层，替代策略固定为两条：
 
 - 策略 1：优先直连 `tiangong-lca-edge-functions` 的 Edge Function / REST（适用于有明确业务语义的 API）
-- 策略 2：若是纯数据库 CRUD 且无需新增服务语义，直接使用官方 Supabase JS SDK
+- 策略 2：对 Supabase 直接访问时不再经过 MCP；复杂 CRUD 优先官方 Supabase JS SDK，像 `process get` 这类窄读路径则允许用 deterministic REST 保持零运行时依赖
 
 这两条共同目标是：不再发明新的中间 transport 实体。
 
@@ -84,8 +84,10 @@ TIANGONG_LCA_REGION=us-east-1
 | `doctor` | 无 |
 | `search flow | process | lifecyclemodel` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY`（`TIANGONG_LCA_REGION` 可选） |
 | `admin embedding-run` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY`（`TIANGONG_LCA_REGION` 可选） |
+| `process get` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY` |
 | `process auto-build | resume-build | publish-build | batch-build` | 无 |
-| `lifecyclemodel build-resulting-process | publish-resulting-process` | 无 |
+| `lifecyclemodel build-resulting-process` | 本地运行默认无；若 request 打开 `process_sources.allow_remote_lookup=true`，则需要 `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY` |
+| `lifecyclemodel publish-resulting-process` | 无 |
 | `publish run` | 无 |
 | `validation run` | 无 |
 
@@ -96,6 +98,7 @@ npm start -- --help
 npm start -- doctor
 npm start -- doctor --json
 npm start -- search flow --input ./request.json --dry-run
+npm start -- process get --id <process-id> --version <version> --json
 npm start -- process auto-build --input ./examples/process-auto-build.request.json --json
 npm start -- process resume-build --run-id <run-id> --json
 npm start -- process publish-build --run-id <run-id> --json
@@ -108,6 +111,15 @@ npm start -- admin embedding-run --input ./jobs.json --dry-run
 ```
 
 ## process / publish / validation 边界
+
+`tiangong process get` 现在是统一 CLI 持有的只读 process 详情命令，负责：
+
+- 从 `TIANGONG_LCA_API_BASE_URL` 推导 Supabase `/rest/v1` 读取路径
+- 读取单个 process `id`
+- 若显式提供 `--version`，先做精确版本查找；找不到时回退到同一 `id` 的最新版本
+- 输出一个稳定的结构化 JSON 报告
+
+这个命令当前只负责 deterministic direct-read，不负责任何远端写入、review、publish 或 workflow 编排。
 
 `tiangong process auto-build` 现在已经承担 `process_from_flow` 主链的第一个 CLI 切片，负责：
 
@@ -156,6 +168,15 @@ npm start -- admin embedding-run --input ./jobs.json --dry-run
 - 为后续 `resume-build` / `publish-build` 保留明确的 `run_root`
 
 这个命令当前只负责本地 batch orchestration，不负责继续串接 resume / publish，也不负责远端 publish commit。
+
+`tiangong lifecyclemodel build-resulting-process` 现在仍然保持本地优先，但已经支持一个显式的 deterministic 远端补全路径：
+
+- 只有当 request 中 `process_sources.allow_remote_lookup=true` 时才启用
+- 直接从 `TIANGONG_LCA_API_BASE_URL` 推导 Supabase `/rest/v1` 读取路径
+- 按 `process_id + version` 精确读取，找不到时回退到该 `id` 的最新版本
+- 不走 MCP，不走语义检索，不改变本地 artifact 契约
+
+也就是说，这个命令现在解决的是“缺 process JSON 时的 deterministic direct-read”，不是把整个 lifecyclemodel build workflow 变成远端编排。
 
 `tiangong publish run` 现在已经成为统一 publish 契约入口，负责：
 

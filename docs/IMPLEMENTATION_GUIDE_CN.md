@@ -22,7 +22,7 @@
 MCP 替代策略也固定为两条：
 
 - 策略 1：对业务 API 直接调用 `tiangong-lca-edge-functions`（Edge Functions / REST）
-- 策略 2：对纯数据库 CRUD 直接使用官方 Supabase JS SDK
+- 策略 2：对 Supabase 直接访问时不再经过 MCP；复杂 CRUD 优先官方 Supabase JS SDK，像 `process get` 这类窄读路径则允许用 deterministic REST 保持零运行时依赖
 
 这两条是并行可选策略，不再引入新的 MCP 中间层。
 
@@ -38,6 +38,7 @@ tiangong
     process
     lifecyclemodel
   process
+    get
     auto-build
     resume-build
     publish-build
@@ -61,6 +62,7 @@ tiangong
 | `tiangong search flow` | `flow_hybrid_search` |
 | `tiangong search process` | `process_hybrid_search` |
 | `tiangong search lifecyclemodel` | `lifecyclemodel_hybrid_search` |
+| `tiangong process get` | 统一 CLI 持有的只读 process 详情读取面；从 `TIANGONG_LCA_API_BASE_URL` 推导 Supabase REST 路径并按 `id/version` 读取 |
 | `tiangong process auto-build` | 本地 `process_from_flow` intake、run-id 生成、artifact scaffold 预写 |
 | `tiangong process resume-build` | 本地 `process_from_flow` resume handoff、state-lock/manifest 收口、resume 元数据与报告输出 |
 | `tiangong process publish-build` | 本地 `process_from_flow` publish handoff、publish bundle/request/intent 产出、state/invocation/handoff 更新 |
@@ -79,14 +81,15 @@ tiangong
 
 `tiangong process ...` 也已经开始承接 `process_from_flow` 主链迁移，其中：
 
+- `tiangong process get` 已可执行
 - `tiangong process auto-build` 已可执行
 - `tiangong process resume-build` 已可执行
 - `tiangong process publish-build` 已可执行
 - `tiangong process batch-build` 已可执行
-- `get` 仍处于 planned 状态
 
 注意：
 
+- `process get` 当前固定为 CLI 内部共享的 deterministic direct-read 面，供 lifecyclemodel resulting-process 和后续 review/governance 迁移复用
 - 已实现的 `process auto-build` 保留了旧 `artifacts/process_from_flow/<run_id>/`、`cache/process_from_flow_state.json`、`cache/agent_handoff_summary.json` 等运行布局
 - `process auto-build` 当前只负责本地 request intake、flow 归一化、run scaffold 和 manifest/report 预写，不继续执行后续阶段
 - 已实现的 `process resume-build` 保留同一套 run 布局，并把本地 state-lock、run-manifest 校验、resume metadata/history、invocation index 更新统一收口到 CLI
@@ -96,6 +99,7 @@ tiangong
 - 已实现的 `process batch-build` 继续走本地优先、artifact-first 路径，并把批量 item 编排、聚合 report、默认 run_dir 分配统一收口到 CLI
 - `process batch-build` 当前只负责本地 batch orchestration，不直接串接 resume / publish 或远端执行器
 - 已实现的 `build-resulting-process` 和 `publish-resulting-process` 都走本地优先、artifact-first 路径，不依赖 Python 或 MCP
+- `build-resulting-process` 现在还支持一个显式的 deterministic direct-read 补全路径：当 request 打开 `process_sources.allow_remote_lookup=true` 时，CLI 会从 `TIANGONG_LCA_API_BASE_URL` 推导 Supabase REST 路径，按 `process_id/version` 直接补齐缺失的 process dataset
 - `publish-resulting-process` 当前负责生成本地 publish handoff 产物，还没有把提交语义直接并入 `publish run`
 - 其余未实现的 `lifecyclemodel` / `process` 子命令仍只提供 help 和固定命名
 - 这样做的目的不是“假装已完成”，而是先固定命令树，再逐个把 workflow 迁入 TypeScript CLI
@@ -328,8 +332,10 @@ TIANGONG_LCA_REGION=us-east-1
 | `doctor` | 无 |
 | `search flow | process | lifecyclemodel` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY`（`TIANGONG_LCA_REGION` 可选） |
 | `admin embedding-run` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY`（`TIANGONG_LCA_REGION` 可选） |
+| `process get` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY` |
 | `process auto-build | resume-build | publish-build | batch-build` | 无 |
-| `lifecyclemodel build-resulting-process | publish-resulting-process` | 无 |
+| `lifecyclemodel build-resulting-process` | 本地运行默认无；若 request 开启 `process_sources.allow_remote_lookup=true`，则需要 `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY` |
+| `lifecyclemodel publish-resulting-process` | 无 |
 | `publish run` | 无 |
 | `validation run` | 无 |
 

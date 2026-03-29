@@ -16,7 +16,7 @@ Current implementation choices:
 The CLI replaces MCP with two explicit strategies:
 
 - strategy 1: call domain APIs directly through `tiangong-lca-edge-functions` (Edge Functions / REST)
-- strategy 2: for direct database CRUD, use the official Supabase JS SDK (`@supabase/supabase-js`) directly
+- strategy 2: access Supabase directly without MCP; prefer the official Supabase JS SDK for broader CRUD semantics, but keep narrow read-only paths on deterministic REST when that avoids unnecessary runtime dependencies
 
 This prevents reintroducing a generic MCP transport layer into the CLI runtime.
 
@@ -26,6 +26,7 @@ This prevents reintroducing a generic MCP transport layer into the CLI runtime.
 - `tiangong search flow`
 - `tiangong search process`
 - `tiangong search lifecyclemodel`
+- `tiangong process get`
 - `tiangong process auto-build`
 - `tiangong process resume-build`
 - `tiangong process publish-build`
@@ -43,7 +44,6 @@ The `lifecyclemodel` and `process` namespaces are now partially implemented. The
 - `tiangong lifecyclemodel auto-build`
 - `tiangong lifecyclemodel validate-build`
 - `tiangong lifecyclemodel publish-build`
-- `tiangong process get`
 
 These remaining commands are intentionally not executable yet. They print an explicit `not implemented yet` message and exit with code `2` until the corresponding workflows are migrated into TypeScript.
 
@@ -97,11 +97,12 @@ Command-level env reality:
 | `doctor` | none |
 | `search *` | `TIANGONG_LCA_API_BASE_URL`, `TIANGONG_LCA_API_KEY`, optional `TIANGONG_LCA_REGION` |
 | `admin embedding-run` | `TIANGONG_LCA_API_BASE_URL`, `TIANGONG_LCA_API_KEY`, optional `TIANGONG_LCA_REGION` |
+| `process get` | `TIANGONG_LCA_API_BASE_URL`, `TIANGONG_LCA_API_KEY` |
 | `process auto-build` | none |
 | `process resume-build` | none |
 | `process publish-build` | none |
 | `process batch-build` | none |
-| `lifecyclemodel build-resulting-process` | none |
+| `lifecyclemodel build-resulting-process` | none for local-only runs; `TIANGONG_LCA_API_BASE_URL` and `TIANGONG_LCA_API_KEY` when `process_sources.allow_remote_lookup=true` |
 | `lifecyclemodel publish-resulting-process` | none |
 | `publish run` | none |
 | `validation run` | none |
@@ -115,6 +116,7 @@ npm start -- --help
 npm start -- doctor
 npm start -- doctor --json
 npm start -- search flow --input ./request.json --dry-run
+npm start -- process get --id <process-id> --version <version> --json
 npm start -- process auto-build --input ./examples/process-auto-build.request.json --json
 npm start -- process resume-build --run-id <run-id> --json
 npm start -- process publish-build --run-id <run-id> --json
@@ -128,6 +130,8 @@ npm start -- admin embedding-run --input ./jobs.json --dry-run
 
 ## Process build scaffold
 
+`tiangong process get` is the CLI-owned read-only process detail surface. It derives a deterministic Supabase REST read path from `TIANGONG_LCA_API_BASE_URL`, resolves one process row by `id/version` with a latest-version fallback, and returns one structured JSON payload without reintroducing MCP, Python, or a generic transport layer.
+
 `tiangong process auto-build` is the first migrated `process_from_flow` slice. It reads one request JSON from `--input`, loads the referenced ILCD flow dataset from `flow_file`, preserves the old run id contract (`pfw_<flow_code>_<flow_uuid8>_<operation>_<UTC_TIMESTAMP>`), and writes a local run scaffold under `artifacts/process_from_flow/<run_id>/` or `--out-dir`.
 
 The command keeps the legacy per-run layout that later stages still expect, including `input/`, `exports/processes/`, `exports/sources/`, `cache/process_from_flow_state.json`, and `cache/agent_handoff_summary.json`. It also adds CLI-owned manifests such as the normalized request snapshot, flow summary, assembly plan, lineage manifest, invocation index, run manifest, and a compact report artifact.
@@ -139,6 +143,8 @@ The command keeps the legacy per-run layout that later stages still expect, incl
 `tiangong process batch-build` is the fourth migrated `process_from_flow` slice. It reads one batch manifest, prepares a self-contained batch root, fans out multiple local `process auto-build` runs through the CLI-owned contract, writes a structured per-item aggregate report, and preserves deterministic item-level artifact paths for downstream `resume-build` or `publish-build` steps.
 
 `resume-build`, `publish-build`, and `batch-build` all still stop at local handoff boundaries. They do not execute remote publish CRUD or commit mode themselves; that boundary remains in `tiangong publish run`.
+
+`tiangong lifecyclemodel build-resulting-process` remains local-first, but it no longer hard-fails when a request explicitly enables `process_sources.allow_remote_lookup`. In that mode the CLI derives a deterministic Supabase REST read path from `TIANGONG_LCA_API_BASE_URL`, resolves missing process datasets by exact `id/version` with a latest-version fallback, and keeps the same local artifact contract instead of routing through MCP or semantic search.
 
 ## Publish and validation
 
@@ -156,6 +162,7 @@ Run the built artifact directly:
 
 ```bash
 node ./bin/tiangong.js doctor
+node ./bin/tiangong.js process get --id <process-id> --json
 node ./bin/tiangong.js process auto-build --input ./examples/process-auto-build.request.json --json
 node ./bin/tiangong.js process resume-build --run-id <run-id> --json
 node ./bin/tiangong.js process publish-build --run-id <run-id> --json
