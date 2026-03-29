@@ -185,6 +185,7 @@ test('executeCli returns help for the process namespace and implemented subcomma
   assert.match(processHelp.stdout, /tiangong process <subcommand>/u);
   assert.match(processHelp.stdout, /auto-build/u);
   assert.match(processHelp.stdout, /resume-build/u);
+  assert.match(processHelp.stdout, /publish-build/u);
 
   const autoBuildHelp = await executeCli(['process', 'auto-build', '--help'], makeDeps());
   assert.equal(autoBuildHelp.exitCode, 0);
@@ -200,6 +201,15 @@ test('executeCli returns help for the process namespace and implemented subcomma
   );
   assert.match(resumeBuildHelp.stdout, /--run-dir/u);
   assert.doesNotMatch(resumeBuildHelp.stdout, /Planned command/u);
+
+  const publishBuildHelp = await executeCli(['process', 'publish-build', '--help'], makeDeps());
+  assert.equal(publishBuildHelp.exitCode, 0);
+  assert.match(
+    publishBuildHelp.stdout,
+    /tiangong process publish-build \[--run-id <id>\] \[--run-dir <dir>\]/u,
+  );
+  assert.match(publishBuildHelp.stdout, /--run-dir/u);
+  assert.doesNotMatch(publishBuildHelp.stdout, /Planned command/u);
 });
 
 test('executeCli executes lifecyclemodel build-resulting-process with injected implementation', async () => {
@@ -469,6 +479,154 @@ test('executeCli executes process resume-build with run-dir only', async () => {
 
     assert.equal(result.exitCode, 0);
     assert.match(result.stdout, /prepared_local_process_resume_run/u);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('executeCli executes process publish-build with injected implementation', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'tg-cli-process-publish-build-cli-'));
+  const runDir = path.join(dir, 'artifacts', 'process_from_flow', 'run-3');
+
+  try {
+    const result = await executeCli(
+      ['process', 'publish-build', '--json', '--run-id', 'run-3', '--run-dir', runDir],
+      {
+        ...makeDeps(),
+        runProcessPublishBuildImpl: async (options) => {
+          assert.equal(options.runId, 'run-3');
+          assert.equal(options.runDir, runDir);
+          return {
+            schema_version: 1,
+            generated_at_utc: '2026-03-29T00:20:00.000Z',
+            status: 'prepared_local_process_publish_bundle',
+            run_id: 'run-3',
+            run_root: runDir,
+            request_id: 'req-3',
+            state_summary: {
+              build_status: 'resume_prepared',
+              next_stage: '10_publish',
+              stop_after: null,
+            },
+            dataset_origins: {
+              processes: 'exports',
+              sources: 'state',
+            },
+            counts: {
+              processes: 2,
+              sources: 1,
+              relations: 0,
+            },
+            publish_defaults: {
+              commit: false,
+              publish_lifecyclemodels: false,
+              publish_processes: true,
+              publish_sources: true,
+              publish_relations: true,
+              publish_process_build_runs: false,
+              relation_mode: 'local_manifest_only',
+            },
+            files: {
+              state: path.join(runDir, 'cache', 'process_from_flow_state.json'),
+              handoff_summary: path.join(runDir, 'cache', 'agent_handoff_summary.json'),
+              run_manifest: path.join(runDir, 'manifests', 'run-manifest.json'),
+              invocation_index: path.join(runDir, 'manifests', 'invocation-index.json'),
+              publish_bundle: path.join(
+                runDir,
+                'stage_outputs',
+                '10_publish',
+                'publish-bundle.json',
+              ),
+              publish_request: path.join(
+                runDir,
+                'stage_outputs',
+                '10_publish',
+                'publish-request.json',
+              ),
+              publish_intent: path.join(
+                runDir,
+                'stage_outputs',
+                '10_publish',
+                'publish-intent.json',
+              ),
+              report: path.join(runDir, 'reports', 'process-publish-build-report.json'),
+            },
+            next_actions: ['inspect: publish request'],
+          };
+        },
+      },
+    );
+
+    assert.equal(result.exitCode, 0);
+    assert.match(result.stdout, /"status":"prepared_local_process_publish_bundle"/u);
+    assert.match(result.stdout, /"publish_request"/u);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('executeCli executes process publish-build with run-dir only', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'tg-cli-process-publish-build-cli-rundir-'));
+  const runDir = path.join(dir, 'artifacts', 'process_from_flow', 'run-4');
+
+  try {
+    const result = await executeCli(['process', 'publish-build', '--run-dir', runDir], {
+      ...makeDeps(),
+      runProcessPublishBuildImpl: async (options) => {
+        assert.equal(options.runId, undefined);
+        assert.equal(options.runDir, runDir);
+        return {
+          schema_version: 1,
+          generated_at_utc: '2026-03-29T00:21:00.000Z',
+          status: 'prepared_local_process_publish_bundle',
+          run_id: 'run-4',
+          run_root: runDir,
+          request_id: null,
+          state_summary: {
+            build_status: 'resume_prepared',
+            next_stage: null,
+            stop_after: null,
+          },
+          dataset_origins: {
+            processes: 'state',
+            sources: 'state',
+          },
+          counts: {
+            processes: 1,
+            sources: 0,
+            relations: 0,
+          },
+          publish_defaults: {
+            commit: false,
+            publish_lifecyclemodels: false,
+            publish_processes: true,
+            publish_sources: true,
+            publish_relations: true,
+            publish_process_build_runs: false,
+            relation_mode: 'local_manifest_only',
+          },
+          files: {
+            state: path.join(runDir, 'cache', 'process_from_flow_state.json'),
+            handoff_summary: path.join(runDir, 'cache', 'agent_handoff_summary.json'),
+            run_manifest: path.join(runDir, 'manifests', 'run-manifest.json'),
+            invocation_index: path.join(runDir, 'manifests', 'invocation-index.json'),
+            publish_bundle: path.join(runDir, 'stage_outputs', '10_publish', 'publish-bundle.json'),
+            publish_request: path.join(
+              runDir,
+              'stage_outputs',
+              '10_publish',
+              'publish-request.json',
+            ),
+            publish_intent: path.join(runDir, 'stage_outputs', '10_publish', 'publish-intent.json'),
+            report: path.join(runDir, 'reports', 'process-publish-build-report.json'),
+          },
+          next_actions: ['inspect: publish request'],
+        };
+      },
+    });
+
+    assert.equal(result.exitCode, 0);
+    assert.match(result.stdout, /prepared_local_process_publish_bundle/u);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -787,7 +945,7 @@ test('executeCli returns parsing errors for invalid publish and validation flags
   assert.match(validationResult.stderr, /INVALID_ARGS/u);
 });
 
-test('executeCli returns parsing errors for invalid lifecyclemodel build, process build, resume, and publish flags', async () => {
+test('executeCli returns parsing errors for invalid lifecyclemodel build, process build, resume, and publish-build flags', async () => {
   const result = await executeCli(
     ['lifecyclemodel', 'build-resulting-process', '--bad-flag'],
     makeDeps(),
@@ -816,6 +974,14 @@ test('executeCli returns parsing errors for invalid lifecyclemodel build, proces
   assert.equal(processResumeResult.exitCode, 2);
   assert.equal(processResumeResult.stdout, '');
   assert.match(processResumeResult.stderr, /INVALID_ARGS/u);
+
+  const processPublishResult = await executeCli(
+    ['process', 'publish-build', '--bad-flag'],
+    makeDeps(),
+  );
+  assert.equal(processPublishResult.exitCode, 2);
+  assert.equal(processPublishResult.stdout, '');
+  assert.match(processPublishResult.stderr, /INVALID_ARGS/u);
 });
 
 test('executeCli executes validation run with injected implementation and report file', async () => {
@@ -940,10 +1106,10 @@ test('executeCli returns planned command message for lifecyclemodel subcommands 
 });
 
 test('executeCli returns planned command message for process subcommands after help is introduced', async () => {
-  const result = await executeCli(['process', 'publish-build'], makeDeps());
+  const result = await executeCli(['process', 'batch-build'], makeDeps());
   assert.equal(result.exitCode, 2);
   assert.equal(result.stdout, '');
-  assert.match(result.stderr, /Command 'process publish-build'/u);
+  assert.match(result.stderr, /Command 'process batch-build'/u);
 });
 
 test('executeCli returns dedicated help for planned lifecyclemodel subcommands', async () => {
@@ -955,9 +1121,9 @@ test('executeCli returns dedicated help for planned lifecyclemodel subcommands',
 });
 
 test('executeCli returns dedicated help for planned process subcommands', async () => {
-  const result = await executeCli(['process', 'publish-build', '--help'], makeDeps());
+  const result = await executeCli(['process', 'batch-build', '--help'], makeDeps());
   assert.equal(result.exitCode, 0);
-  assert.match(result.stdout, /tiangong process publish-build --run-id <id>/u);
+  assert.match(result.stdout, /tiangong process batch-build --input <file>/u);
   assert.match(result.stdout, /Execution is not implemented yet/u);
   assert.equal(result.stderr, '');
 });

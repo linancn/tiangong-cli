@@ -24,6 +24,11 @@ import {
   type ProcessResumeBuildReport,
   type RunProcessResumeBuildOptions,
 } from './lib/process-resume-build.js';
+import {
+  runProcessPublishBuild,
+  type ProcessPublishBuildReport,
+  type RunProcessPublishBuildOptions,
+} from './lib/process-publish-build.js';
 import { runPublish, type PublishReport, type RunPublishOptions } from './lib/publish.js';
 import { executeRemoteCommand, getRemoteCommandHelp } from './lib/remote.js';
 import {
@@ -50,6 +55,9 @@ export type CliDeps = {
   runProcessResumeBuildImpl?: (
     options: RunProcessResumeBuildOptions,
   ) => Promise<ProcessResumeBuildReport>;
+  runProcessPublishBuildImpl?: (
+    options: RunProcessPublishBuildOptions,
+  ) => Promise<ProcessPublishBuildReport>;
 };
 
 export type CliResult = {
@@ -81,7 +89,7 @@ Commands:
 Implemented Commands:
   doctor     show environment diagnostics
   search     flow | process | lifecyclemodel
-  process    auto-build | resume-build
+  process    auto-build | resume-build | publish-build
   lifecyclemodel build-resulting-process | publish-resulting-process
   publish    run
   validation run
@@ -92,7 +100,7 @@ Planned Surface (not implemented yet):
   lifecyclemodel auto-build | validate-build | publish-build
   review     flow | process
   flow       get | list | remediate | publish-version | regen-product
-  process    get | auto-build | resume-build | publish-build | batch-build
+  process    get | batch-build
   job        get | wait | logs
 
 Planned commands currently print an explicit "not implemented yet" message and exit with code 2.
@@ -103,6 +111,7 @@ Examples:
   tiangong search process --input ./request.json --dry-run
   tiangong process auto-build --input ./pff-request.json
   tiangong process resume-build --run-id <id>
+  tiangong process publish-build --run-id <id>
   tiangong publish run --input ./publish-request.json --dry-run
   tiangong validation run --input-dir ./package --engine auto
   tiangong admin embedding-run --input ./jobs.json
@@ -249,6 +258,18 @@ Options:
 `.trim();
 }
 
+function renderProcessPublishBuildHelp(): string {
+  return `Usage:
+  tiangong process publish-build [--run-id <id>] [--run-dir <dir>] [options]
+
+Options:
+  --run-id <id>      Existing process build run id
+  --run-dir <dir>    Existing process build run directory
+  --json             Print compact JSON
+  -h, --help
+`.trim();
+}
+
 function renderProcessHelp(): string {
   return `Usage:
   tiangong process <subcommand> [options]
@@ -256,16 +277,17 @@ function renderProcessHelp(): string {
 Implemented Subcommands:
   auto-build   Prepare a local process-from-flow run scaffold and artifact workspace
   resume-build Prepare a local resume handoff from one existing process build run
+  publish-build Prepare publish handoff artifacts from one existing process build run
 
 Planned Subcommands:
   get          Load one process dataset or process build run summary
-  publish-build Publish a process build run through the unified publish layer
   batch-build  Run multiple process build requests through one batch-oriented CLI surface
 
 Examples:
   tiangong process --help
   tiangong process auto-build --help
   tiangong process resume-build --run-id <id> --help
+  tiangong process publish-build --run-id <id> --help
 `.trim();
 }
 
@@ -312,16 +334,6 @@ const processPlannedHelp = {
 Planned contract:
   - load one process dataset or process build run summary by identifier
   - keep read-only access distinct from build/publish workflows
-
-Status:
-  Planned command. Execution is not implemented yet.
-`.trim(),
-  'publish-build': `Usage:
-  tiangong process publish-build --run-id <id> [options]
-
-Planned contract:
-  - load one completed process build run
-  - generate publish handoff artifacts and later commit through the unified publish layer
 
 Status:
   Planned command. Execution is not implemented yet.
@@ -740,6 +752,40 @@ function parseProcessResumeBuildFlags(args: string[]): {
   };
 }
 
+function parseProcessPublishBuildFlags(args: string[]): {
+  help: boolean;
+  json: boolean;
+  runId: string;
+  runDir: string | null;
+} {
+  let values: ReturnType<typeof parseArgs>['values'];
+  try {
+    ({ values } = parseArgs({
+      args,
+      allowPositionals: false,
+      strict: true,
+      options: {
+        help: { type: 'boolean', short: 'h' },
+        json: { type: 'boolean' },
+        'run-id': { type: 'string' },
+        'run-dir': { type: 'string' },
+      },
+    }));
+  } catch (error) {
+    throw new CliError(String(error), {
+      code: 'INVALID_ARGS',
+      exitCode: 2,
+    });
+  }
+
+  return {
+    help: Boolean(values.help),
+    json: Boolean(values.json),
+    runId: typeof values['run-id'] === 'string' ? values['run-id'] : '',
+    runDir: typeof values['run-dir'] === 'string' ? values['run-dir'] : null,
+  };
+}
+
 function plannedCommand(command: string, subcommand?: string): CliResult {
   const suffix = subcommand ? ` ${subcommand}` : '';
   return {
@@ -773,6 +819,7 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
       deps.runLifecyclemodelPublishResultingProcessImpl ?? runLifecyclemodelPublishResultingProcess;
     const processAutoBuildImpl = deps.runProcessAutoBuildImpl ?? runProcessAutoBuild;
     const processResumeBuildImpl = deps.runProcessResumeBuildImpl ?? runProcessResumeBuild;
+    const processPublishBuildImpl = deps.runProcessPublishBuildImpl ?? runProcessPublishBuild;
 
     if (flags.version) {
       return { exitCode: 0, stdout: '0.0.1\n', stderr: '' };
@@ -921,6 +968,28 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
       }
 
       const report = await processResumeBuildImpl({
+        runId: processFlags.runId || undefined,
+        runDir: processFlags.runDir,
+      });
+
+      return {
+        exitCode: 0,
+        stdout: stringifyJson(report, processFlags.json),
+        stderr: '',
+      };
+    }
+
+    if (command === 'process' && subcommand === 'publish-build') {
+      const processFlags = parseProcessPublishBuildFlags(commandArgs);
+      if (processFlags.help) {
+        return {
+          exitCode: 0,
+          stdout: `${renderProcessPublishBuildHelp()}\n`,
+          stderr: '',
+        };
+      }
+
+      const report = await processPublishBuildImpl({
         runId: processFlags.runId || undefined,
         runDir: processFlags.runDir,
       });
