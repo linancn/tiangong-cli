@@ -527,6 +527,50 @@ test('executeCli executes flow list with injected implementation', async () => {
   assert.equal(result.stderr, '');
 });
 
+test('executeCli parses non-all flow list pagination flags', async () => {
+  const deps = makeDeps({
+    TIANGONG_LCA_API_BASE_URL: 'https://supabase.example/functions/v1',
+    TIANGONG_LCA_API_KEY: 'supabase-api-key',
+  });
+
+  const result = await executeCli(
+    ['flow', 'list', '--id', 'flow-1', '--limit', '3', '--offset', '1'],
+    {
+      ...deps,
+      runFlowListImpl: async (options) => {
+        assert.deepEqual(options.ids, ['flow-1']);
+        assert.equal(options.limit, 3);
+        assert.equal(options.offset, 1);
+        assert.equal(options.all, false);
+        return {
+          schema_version: 1,
+          generated_at_utc: '2026-03-30T00:00:00.000Z',
+          status: 'listed_remote_flows',
+          filters: {
+            ids: ['flow-1'],
+            requested_version: null,
+            requested_user_id: null,
+            requested_state_codes: [],
+            requested_type_of_dataset: [],
+            order: 'id.asc,version.asc',
+            all: false,
+            limit: 3,
+            offset: 1,
+            page_size: null,
+          },
+          count: 0,
+          source_urls: ['https://supabase.example/rest/v1/flows'],
+          rows: [],
+        };
+      },
+    },
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.stderr, '');
+  assert.equal(JSON.parse(result.stdout).filters.offset, 1);
+});
+
 test('executeCli executes flow list with explicit limit and offset', async () => {
   const deps = makeDeps({
     TIANGONG_LCA_API_BASE_URL: 'https://supabase.example/functions/v1',
