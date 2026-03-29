@@ -11,6 +11,15 @@ Current implementation choices:
 - one stable command surface for humans, agents, CI, and skills
 - zero npm production runtime dependencies
 
+## MCP replacement policy
+
+The CLI replaces MCP with two explicit strategies:
+
+- strategy 1: call domain APIs directly through `tiangong-lca-edge-functions` (Edge Functions / REST)
+- strategy 2: for direct database CRUD, use the official Supabase JS SDK (`@supabase/supabase-js`) directly
+
+This prevents reintroducing a generic MCP transport layer into the CLI runtime.
+
 ## Implemented commands
 
 - `tiangong doctor`
@@ -81,7 +90,23 @@ TIANGONG_LCA_API_KEY=
 TIANGONG_LCA_REGION=us-east-1
 ```
 
-This CLI does not currently require KB, MinerU, MCP, or OpenAI env keys. Those remain skill- or workflow-specific until the corresponding subcommands are actually implemented here.
+Command-level env reality:
+
+| Command group | Required env |
+| --- | --- |
+| `doctor` | none |
+| `search *` | `TIANGONG_LCA_API_BASE_URL`, `TIANGONG_LCA_API_KEY`, optional `TIANGONG_LCA_REGION` |
+| `admin embedding-run` | `TIANGONG_LCA_API_BASE_URL`, `TIANGONG_LCA_API_KEY`, optional `TIANGONG_LCA_REGION` |
+| `process auto-build` | none |
+| `process resume-build` | none |
+| `process publish-build` | none |
+| `process batch-build` | none |
+| `lifecyclemodel build-resulting-process` | none |
+| `lifecyclemodel publish-resulting-process` | none |
+| `publish run` | none |
+| `validation run` | none |
+
+This CLI does not currently require KB, TianGong unstructured service, MCP, or OpenAI env keys. Those remain legacy workflow concerns until the corresponding subcommands are implemented in this repository.
 
 Run the CLI:
 
@@ -90,13 +115,13 @@ npm start -- --help
 npm start -- doctor
 npm start -- doctor --json
 npm start -- search flow --input ./request.json --dry-run
-npm start -- process auto-build --input ./pff-request.json --json
+npm start -- process auto-build --input ./examples/process-auto-build.request.json --json
 npm start -- process resume-build --run-id <run-id> --json
 npm start -- process publish-build --run-id <run-id> --json
-npm start -- process batch-build --input ./batch-request.json --json
+npm start -- process batch-build --input ./examples/process-batch-build.request.json --json
 npm start -- lifecyclemodel build-resulting-process --input ./request.json --json
 npm start -- lifecyclemodel publish-resulting-process --run-dir ./runs/example --publish-processes --publish-relations --json
-npm start -- publish run --input ./publish-request.json --dry-run
+npm start -- publish run --input ./examples/publish-run.request.json --dry-run
 npm start -- validation run --input-dir ./tidas-package --engine auto
 npm start -- admin embedding-run --input ./jobs.json --dry-run
 ```
@@ -131,12 +156,20 @@ Run the built artifact directly:
 
 ```bash
 node ./bin/tiangong.js doctor
-node ./bin/tiangong.js process auto-build --input ./pff-request.json --json
+node ./bin/tiangong.js process auto-build --input ./examples/process-auto-build.request.json --json
 node ./bin/tiangong.js process resume-build --run-id <run-id> --json
 node ./bin/tiangong.js process publish-build --run-id <run-id> --json
-node ./bin/tiangong.js process batch-build --input ./batch-request.json --json
+node ./bin/tiangong.js process batch-build --input ./examples/process-batch-build.request.json --json
 node ./dist/src/main.js doctor --json
 ```
+
+## Examples
+
+Minimal example requests are available under `examples/`:
+
+- `examples/process-auto-build.request.json`
+- `examples/process-batch-build.request.json`
+- `examples/publish-run.request.json`
 
 ## Workspace usage
 

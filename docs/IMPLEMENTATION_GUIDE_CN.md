@@ -19,6 +19,13 @@
 - 优先文件输入、结构化 JSON 输出
 - 把 `tiangong-lca-skills` 收敛成这个 CLI 的调用方，而不是并行产品面
 
+MCP 替代策略也固定为两条：
+
+- 策略 1：对业务 API 直接调用 `tiangong-lca-edge-functions`（Edge Functions / REST）
+- 策略 2：对纯数据库 CRUD 直接使用官方 Supabase JS SDK
+
+这两条是并行可选策略，不再引入新的 MCP 中间层。
+
 ## 2. 当前落地范围
 
 ### 2.1 已实现命令
@@ -172,6 +179,12 @@ tiangong admin embedding-run
 
 如果为了“统一”再做一个泛化 CRUD 协议，只会重新制造熵。
 
+具体执行上：
+
+- 有现成业务语义和服务边界的能力，统一走 edge-functions / REST
+- 只需数据层 CRUD 且无需新服务抽象时，直接走 `@supabase/supabase-js`
+- 不再设计“CLI -> MCP -> DB”的第三条路径
+
 ### 4.3 文件优先
 
 优先形式：
@@ -307,6 +320,18 @@ TIANGONG_LCA_REGION=us-east-1
 - 某类能力如果还停留在 skills / Python workflow 层，就继续由那一层自己管理 env
 - `publish run` / `validation run` 都是本地契约与执行收口，不新增远程 env
 - 因此当前不预放 `TIANGONG_KB_*`、`TIANGONG_MINERU_*`、`OPENAI_*` 或 `TIANGONG_LCA_REMOTE_*`
+
+命令级 env 矩阵：
+
+| 命令组 | 必需 env |
+| --- | --- | --- | --- | --- |
+| `doctor` | 无 |
+| `search flow | process | lifecyclemodel` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY`（`TIANGONG_LCA_REGION` 可选） |
+| `admin embedding-run` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY`（`TIANGONG_LCA_REGION` 可选） |
+| `process auto-build | resume-build | publish-build | batch-build` | 无 |
+| `lifecyclemodel build-resulting-process | publish-resulting-process` | 无 |
+| `publish run` | 无 |
+| `validation run` | 无 |
 
 ## 6. 质量门
 

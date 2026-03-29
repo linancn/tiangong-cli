@@ -9,6 +9,15 @@
 - 直连 REST：不再以内置 MCP 作为 CLI 传输层
 - 文件优先：输入优先走 JSON / JSONL / 本地文件，输出优先走结构化 JSON
 
+## MCP 替代策略（明确约束）
+
+统一 CLI 不再引入 MCP 作为内部传输层，替代策略固定为两条：
+
+- 策略 1：优先直连 `tiangong-lca-edge-functions` 的 Edge Function / REST（适用于有明确业务语义的 API）
+- 策略 2：若是纯数据库 CRUD 且无需新增服务语义，直接使用官方 Supabase JS SDK
+
+这两条共同目标是：不再发明新的中间 transport 实体。
+
 当前已落地的命令：
 
 - `tiangong doctor`
@@ -59,14 +68,26 @@ TIANGONG_LCA_API_KEY=
 TIANGONG_LCA_REGION=us-east-1
 ```
 
-不再兼容旧变量名，也不再把 KB、MinerU、OpenAI、MCP 相关 env 预先塞进统一 CLI。
+不再兼容旧变量名，也不再把 KB、TianGong unstructured service、OpenAI、MCP 相关 env 预先塞进统一 CLI。
 
 原因很直接：
 
 - 当前 CLI 已实现命令只直连 TianGong LCA 的 REST / Edge Functions
 - `publish run` / `validation run` 只做本地契约和执行收口，不新增远程 env
-- 知识库、OCR、LLM、远程 MCP 连接目前仍属于 `tiangong-lca-skills` 或 Python workflow 层
+- 知识库、OCR、LLM、远程连接目前仍属于 legacy workflow 层（当前主要在 `tiangong-lca-skills`）
 - 若未来 CLI 真正落地对应子命令，再按命令面新增 env，而不是提前暴露一整组无实际消费者的配置
+
+命令级 env 现实如下：
+
+| 命令组 | 必需 env |
+| --- | --- | --- | --- | --- |
+| `doctor` | 无 |
+| `search flow | process | lifecyclemodel` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY`（`TIANGONG_LCA_REGION` 可选） |
+| `admin embedding-run` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY`（`TIANGONG_LCA_REGION` 可选） |
+| `process auto-build | resume-build | publish-build | batch-build` | 无 |
+| `lifecyclemodel build-resulting-process | publish-resulting-process` | 无 |
+| `publish run` | 无 |
+| `validation run` | 无 |
 
 ## 调试项目
 
@@ -75,13 +96,13 @@ npm start -- --help
 npm start -- doctor
 npm start -- doctor --json
 npm start -- search flow --input ./request.json --dry-run
-npm start -- process auto-build --input ./pff-request.json --json
+npm start -- process auto-build --input ./examples/process-auto-build.request.json --json
 npm start -- process resume-build --run-id <run-id> --json
 npm start -- process publish-build --run-id <run-id> --json
-npm start -- process batch-build --input ./batch-request.json --json
+npm start -- process batch-build --input ./examples/process-batch-build.request.json --json
 npm start -- lifecyclemodel build-resulting-process --input ./request.json --json
 npm start -- lifecyclemodel publish-resulting-process --run-dir ./runs/example --publish-processes --publish-relations --json
-npm start -- publish run --input ./publish-request.json --dry-run
+npm start -- publish run --input ./examples/publish-run.request.json --dry-run
 npm start -- validation run --input-dir ./tidas-package --engine auto
 npm start -- admin embedding-run --input ./jobs.json --dry-run
 ```
@@ -222,6 +243,14 @@ npm run build
 - `process-automated-builder` 的本地 batch orchestration 也已迁入 `tiangong process batch-build`
 - 其余重型 workflow 先保留原执行器，但由 `tiangong` 统一调度
 - 所有新脚本优先使用统一环境变量名，不再扩散旧变量名
+
+## 示例请求文件
+
+仓库已提供三份最小请求样例，便于 skills 和 agent 直接复用：
+
+- `examples/process-auto-build.request.json`
+- `examples/process-batch-build.request.json`
+- `examples/publish-run.request.json`
 
 ## 当前目录约定
 

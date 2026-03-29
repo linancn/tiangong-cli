@@ -19,6 +19,7 @@
 - [ ] 所有新能力只能先定义成 `tiangong <noun> <verb>` 命令，再实现
 - [ ] `tiangong-lca-skills` 中的 wrapper 只能调用 `tiangong`，不能再直接 `curl`、直接调 MCP、直接跑业务 Python
 - [ ] CLI 的 env 只能按实际已实现命令逐步增加，不预埋未来猜测接口
+- [x] CLI 内部不再保留 “MCP 传输层” 作为技术路径；MCP 替代策略已明确为 Edge Functions/REST 或 Supabase JS CRUD
 
 ## 3. Repo 边界
 
@@ -75,7 +76,7 @@
 | `lifecycleinventory-review` | 仍是 review workflow | Python review script | 迁成 `tiangong review process` | P2 |
 | `flow-governance-review` | 仍是治理 workflow | shell + 多个 Python helper + 可选 MCP | 迁成 `tiangong flow ...` / `tiangong review flow` | P2 |
 | `lifecyclemodel-recursive-orchestrator` | 仍是 orchestrator | Python orchestrator，串联多个技能 | 迁成 CLI 编排命令 | P3 |
-| `lca-publish-executor` | 仍是 publish contract layer | Python publish executor | 迁成 CLI publish / handoff 层 | P3 |
+| `lca-publish-executor` | skills 侧已进入 CLI 收口（Node wrapper），等待并入主线 | `skill -> tiangong publish run` | 完成 merge 后仅保留薄 wrapper | P2 |
 
 ## 5. 现状证据
 
@@ -294,7 +295,7 @@ ToDo：
 完成定义：
 
 - [ ] `process-automated-builder` 只剩 `skill -> tiangong process ...`
-- [ ] agent 不再需要知道 LangGraph / MCP / OpenAI / MinerU 细节
+- [ ] agent 不再需要知道 LangGraph / MCP / OpenAI / TianGong unstructured 细节
 
 ### Phase 7：迁 `lifecyclemodel-automated-builder`
 
@@ -433,18 +434,22 @@ ToDo：
 
 ## 9. 立即执行的短清单
 
-如果只按最短路径推进，下一轮建议严格做这 8 件事：
+当前已经完成：
 
-当前重点已经推进到第 8 项，且 `tiangong process auto-build` / `resume-build` / `publish-build` / `batch-build`（Phase 6.1 / 6.2 / 6.3 / 6.4）已完成。
+1. `tiangong process auto-build` / `resume-build` / `publish-build` / `batch-build`（Phase 6.1 / 6.2 / 6.3 / 6.4）。
+2. `tiangong lifecyclemodel build-resulting-process` / `publish-resulting-process` 子命令落地。
+3. `tiangong publish run` 与 `tiangong validation run` 作为统一契约边界落地。
 
-1. 修 CLI help，让命令面和真实实现一致。
-2. 修 skills 文档中的 `TIANGONG_CLI_DIR` 残留。
-3. 正式引入 `tiangong lifecyclemodel ...` 命名空间。
-4. 先完成 `tiangong lifecyclemodel build-resulting-process`。
-5. 完成 `tiangong lifecyclemodel publish-resulting-process`。
-6. 把 `lifecyclemodel-resulting-process-builder` 改成薄 wrapper。
-7. 把 `lca-publish-executor` 收口到 `tiangong publish run`。
-8. 创建 follow-up skills child issue，把 `process-automated-builder` 切到 CLI-only 执行链。
+下一轮建议严格做这 8 件事（从当前状态继续推进）：
+
+1. 把 `process-automated-builder` 文档改为 CLI 主链叙事，Python/MCP 路径仅标记为 legacy。
+2. 把 `process-automated-builder` wrapper 改成 CLI-only 入口，避免 `run-process-automated-builder.sh` 继续作为默认入口。
+3. 为 `lifecyclemodel-resulting-process-builder` 收掉剩余可选远端 lookup 分支，固定为 REST 路径。
+4. 完成 `lifecyclemodel-automated-builder` 的 CLI 子命令切片设计（`auto-build` / `validate-build` / `publish-build`）。
+5. 让 review/governance 进入 CLI 命令树（至少固化 `tiangong review ...` 目标 contract）。
+6. 明确 publish commit 的唯一执行边界：`tiangong publish run` executor，不回流到 skill 私有实现。
+7. 在文档与示例中彻底统一 “TianGong unstructured service” 命名，移除 MinerU 叙事。
+8. 对已迁移 thin skills 再做一轮 smoke check，并把结果写回各自 issue/PR。
 
 ## 10. 不应该做的事
 
