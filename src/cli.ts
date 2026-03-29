@@ -55,6 +55,11 @@ import {
   type FlowRemediationReport,
   type RunFlowRemediateOptions,
 } from './lib/flow-remediate.js';
+import {
+  runFlowPublishVersion,
+  type FlowPublishVersionReport,
+  type RunFlowPublishVersionOptions,
+} from './lib/flow-publish-version.js';
 import { executeRemoteCommand, getRemoteCommandHelp } from './lib/remote.js';
 import {
   runValidation,
@@ -90,6 +95,9 @@ export type CliDeps = {
   runProcessReviewImpl?: (options: RunProcessReviewOptions) => Promise<ProcessReviewReport>;
   runFlowReviewImpl?: (options: RunFlowReviewOptions) => Promise<FlowReviewReport>;
   runFlowRemediateImpl?: (options: RunFlowRemediateOptions) => Promise<FlowRemediationReport>;
+  runFlowPublishVersionImpl?: (
+    options: RunFlowPublishVersionOptions,
+  ) => Promise<FlowPublishVersionReport>;
 };
 
 export type CliResult = {
@@ -122,7 +130,7 @@ Implemented Commands:
   doctor     show environment diagnostics
   search     flow | process | lifecyclemodel
   process    get | auto-build | resume-build | publish-build | batch-build
-  flow       remediate
+  flow       remediate | publish-version
   lifecyclemodel build-resulting-process | publish-resulting-process
   review     process | flow
   publish    run
@@ -133,7 +141,7 @@ Planned Surface (not implemented yet):
   auth       whoami | doctor-auth
   lifecyclemodel auto-build | validate-build | publish-build
   review     lifecyclemodel
-  flow       get | list | publish-version | regen-product
+  flow       get | list | regen-product
   job        get | wait | logs
 
 Planned commands currently print an explicit "not implemented yet" message and exit with code 2.
@@ -148,6 +156,7 @@ Examples:
   tiangong process publish-build --run-id <id>
   tiangong process batch-build --input ./batch-request.json
   tiangong flow remediate --input-file ./invalid-flows.jsonl --out-dir ./flow-remediation
+  tiangong flow publish-version --input-file ./ready-flows.jsonl --out-dir ./flow-publish --commit
   tiangong review process --run-root ./artifacts/process_from_flow/<run_id> --run-id <run_id> --out-dir ./review
   tiangong review flow --rows-file ./flows.json --out-dir ./review
   tiangong publish run --input ./publish-request.json --dry-run
@@ -233,16 +242,17 @@ function renderFlowHelp(): string {
 
 Implemented Subcommands:
   remediate    Deterministically repair invalid local flow rows and emit artifact-first outputs
+  publish-version Publish remediated flow versions through the unified CLI surface
 
 Planned Subcommands:
   get             Load one flow through the unified CLI surface
   list            Query or enumerate flows through the unified CLI surface
-  publish-version Prepare a later flow publish/version handoff
   regen-product   Regenerate later product-side artifacts from a flow workflow slice
 
 Examples:
   tiangong flow --help
   tiangong flow remediate --help
+  tiangong flow publish-version --help
 `.trim();
 }
 
@@ -263,6 +273,32 @@ Outputs written under --out-dir:
   - flows_tidas_sdk_plus_classification_remediation_audit.jsonl
   - flows_tidas_sdk_plus_classification_remediation_report.json
   - flows_tidas_sdk_plus_classification_residual_manual_queue_prompt.md
+`.trim();
+}
+
+function renderFlowPublishVersionHelp(): string {
+  return `Usage:
+  tiangong flow publish-version --input-file <file> --out-dir <dir> [options]
+
+Options:
+  --input-file <file>       Ready-for-publish flow rows as JSON or JSONL
+  --out-dir <dir>           Output directory for publish-version artifacts
+  --commit                  Execute remote writes
+  --dry-run                 Plan the publish-version operations without remote writes
+  --max-workers <n>         Parallel worker count (default: 4)
+  --limit <n>               Optional row limit; 0 means all rows
+  --target-user-id <id>     Override the target owner when input rows omit user_id
+  --json                    Print compact JSON
+  -h, --help
+
+Environment:
+  TIANGONG_LCA_API_BASE_URL
+  TIANGONG_LCA_API_KEY
+
+Outputs written under --out-dir:
+  - flows_tidas_sdk_plus_classification_mcp_success_list.json
+  - flows_tidas_sdk_plus_classification_remote_validation_failed.jsonl
+  - flows_tidas_sdk_plus_classification_mcp_sync_report.json
 `.trim();
 }
 
@@ -532,16 +568,6 @@ Status:
 Planned contract:
   - enumerate flow rows through the unified CLI surface
   - keep filtering, pagination, and output shape deterministic for agents
-
-Status:
-  Planned command. Execution is not implemented yet.
-`.trim(),
-  'publish-version': `Usage:
-  tiangong flow publish-version --input <file> [options]
-
-Planned contract:
-  - prepare or execute a later flow version publish handoff
-  - preserve dry-run and commit semantics from the unified publish contract
 
 Status:
   Planned command. Execution is not implemented yet.
@@ -857,6 +883,104 @@ function parseFlowRemediateFlags(args: string[]): {
     json: Boolean(values.json),
     inputFile: typeof values['input-file'] === 'string' ? values['input-file'] : '',
     outDir: typeof values['out-dir'] === 'string' ? values['out-dir'] : '',
+  };
+}
+
+function parseFlowPublishVersionFlags(args: string[]): {
+  help: boolean;
+  json: boolean;
+  inputFile: string;
+  outDir: string;
+  commit: boolean;
+  maxWorkers: number | undefined;
+  limit: number | undefined;
+  targetUserId: string | null;
+} {
+  let values: ReturnType<typeof parseArgs>['values'];
+  try {
+    ({ values } = parseArgs({
+      args,
+      allowPositionals: false,
+      strict: true,
+      options: {
+        help: { type: 'boolean', short: 'h' },
+        json: { type: 'boolean' },
+        commit: { type: 'boolean' },
+        'dry-run': { type: 'boolean' },
+        'input-file': { type: 'string' },
+        'out-dir': { type: 'string' },
+        'max-workers': { type: 'string' },
+        limit: { type: 'string' },
+        'target-user-id': { type: 'string' },
+      },
+    }));
+  } catch (error) {
+    throw new CliError(String(error), {
+      code: 'INVALID_ARGS',
+      exitCode: 2,
+    });
+  }
+
+  if (values.commit && values['dry-run']) {
+    throw new CliError('Cannot pass both --commit and --dry-run.', {
+      code: 'FLOW_PUBLISH_VERSION_MODE_CONFLICT',
+      exitCode: 2,
+    });
+  }
+
+  const parsePositiveIntegerFlag = (
+    value: unknown,
+    label: string,
+    code: string,
+  ): number | undefined => {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new CliError(`Expected ${label} to be a positive integer.`, {
+        code,
+        exitCode: 2,
+      });
+    }
+    return parsed;
+  };
+
+  const parseNonNegativeIntegerFlag = (
+    value: unknown,
+    label: string,
+    code: string,
+  ): number | undefined => {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isInteger(parsed) || parsed < 0) {
+      throw new CliError(`Expected ${label} to be a non-negative integer.`, {
+        code,
+        exitCode: 2,
+      });
+    }
+    return parsed;
+  };
+
+  return {
+    help: Boolean(values.help),
+    json: Boolean(values.json),
+    inputFile: typeof values['input-file'] === 'string' ? values['input-file'] : '',
+    outDir: typeof values['out-dir'] === 'string' ? values['out-dir'] : '',
+    commit: Boolean(values.commit),
+    maxWorkers: parsePositiveIntegerFlag(
+      values['max-workers'],
+      '--max-workers',
+      'INVALID_FLOW_PUBLISH_VERSION_MAX_WORKERS',
+    ),
+    limit: parseNonNegativeIntegerFlag(
+      values.limit,
+      '--limit',
+      'INVALID_FLOW_PUBLISH_VERSION_LIMIT',
+    ),
+    targetUserId: typeof values['target-user-id'] === 'string' ? values['target-user-id'] : null,
   };
 }
 
@@ -1321,6 +1445,7 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
     const processReviewImpl = deps.runProcessReviewImpl ?? runProcessReview;
     const flowReviewImpl = deps.runFlowReviewImpl ?? runFlowReview;
     const flowRemediateImpl = deps.runFlowRemediateImpl ?? runFlowRemediate;
+    const flowPublishVersionImpl = deps.runFlowPublishVersionImpl ?? runFlowPublishVersion;
 
     if (flags.version) {
       return { exitCode: 0, stdout: '0.0.1\n', stderr: '' };
@@ -1567,6 +1692,30 @@ export async function executeCli(argv: string[], deps: CliDeps): Promise<CliResu
 
       return {
         exitCode: 0,
+        stdout: stringifyJson(report, flowFlags.json),
+        stderr: '',
+      };
+    }
+
+    if (command === 'flow' && subcommand === 'publish-version') {
+      const flowFlags = parseFlowPublishVersionFlags(commandArgs);
+      if (flowFlags.help) {
+        return { exitCode: 0, stdout: `${renderFlowPublishVersionHelp()}\n`, stderr: '' };
+      }
+
+      const report = await flowPublishVersionImpl({
+        inputFile: flowFlags.inputFile,
+        outDir: flowFlags.outDir,
+        commit: flowFlags.commit,
+        maxWorkers: flowFlags.maxWorkers,
+        limit: flowFlags.limit,
+        targetUserId: flowFlags.targetUserId,
+        env: deps.env,
+        fetchImpl: deps.fetchImpl,
+      });
+
+      return {
+        exitCode: report.status === 'completed_flow_publish_version_with_failures' ? 1 : 0,
         stdout: stringifyJson(report, flowFlags.json),
         stderr: '',
       };

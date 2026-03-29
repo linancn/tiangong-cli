@@ -33,6 +33,8 @@
 - `tiangong lifecyclemodel publish-resulting-process`
 - `tiangong review process`
 - `tiangong review flow`
+- `tiangong flow remediate`
+- `tiangong flow publish-version`
 - `tiangong publish run`
 - `tiangong validation run`
 - `tiangong admin embedding-run`
@@ -102,6 +104,8 @@ TIANGONG_LCA_LLM_MODEL=
 | `lifecyclemodel publish-resulting-process` | 无 |
 | `review process` | 纯规则 review 默认无；若显式启用 `--enable-llm`，则需要 `TIANGONG_LCA_LLM_BASE_URL`、`TIANGONG_LCA_LLM_API_KEY`、`TIANGONG_LCA_LLM_MODEL` |
 | `review flow` | 纯规则 review 默认无；若显式启用 `--enable-llm`，则需要 `TIANGONG_LCA_LLM_BASE_URL`、`TIANGONG_LCA_LLM_API_KEY`、`TIANGONG_LCA_LLM_MODEL` |
+| `flow remediate` | 无 |
+| `flow publish-version` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY` |
 | `publish run` | 无 |
 | `validation run` | 无 |
 
@@ -121,6 +125,8 @@ npm start -- lifecyclemodel build-resulting-process --input ./request.json --jso
 npm start -- lifecyclemodel publish-resulting-process --run-dir ./runs/example --publish-processes --publish-relations --json
 npm start -- review process --run-root ./artifacts/process_from_flow/<run_id> --run-id <run_id> --out-dir ./review --json
 npm start -- review flow --rows-file ./flows.json --out-dir ./flow-review --json
+npm start -- flow remediate --input-file ./invalid-flows.jsonl --out-dir ./flow-remediation --json
+npm start -- flow publish-version --input-file ./ready-flows.jsonl --out-dir ./flow-publish --dry-run --json
 npm start -- publish run --input ./examples/publish-run.request.json --dry-run
 npm start -- validation run --input-dir ./tidas-package --engine auto
 npm start -- admin embedding-run --input ./jobs.json --dry-run
@@ -223,6 +229,23 @@ npm start -- admin embedding-run --input ./jobs.json --dry-run
 - 输出 `flow_review_report.json`
 
 这个命令同样保持本地 artifact-first。若显式传入 `--enable-llm`，则通过 CLI 内部统一的 `TIANGONG_LCA_LLM_*` 运行时做可选语义审核；当前 CLI 切片明确不支持 `--with-reference-context`，也还没有接入本地 registry enrichment。
+
+`tiangong flow remediate` 现在已经承担 flow governance 的第一个 CLI remediation 切片，负责：
+
+- 读取单个 invalid flow JSON / JSONL 输入
+- 执行 deterministic round1 remediation
+- 输出历史兼容的 `remediated_all`、`ready_for_mcp`、`manual_queue`、`audit`、`report`、`prompt` 工件
+
+这个命令当前只负责本地 round1 remediation，不负责远端 publish、round2 重试或后续产品侧再生逻辑。
+
+`tiangong flow publish-version` 现在已经承担 flow governance 的第一个 CLI 远端写入切片，负责：
+
+- 读取单个 ready-for-publish flow JSON / JSONL 输入
+- 从 `TIANGONG_LCA_API_BASE_URL` 推导 Supabase `/rest/v1/flows` 路径
+- 在 dry-run 或 commit 模式下决定 `insert` / `update_existing` / failure
+- 输出历史兼容的 `mcp_success_list`、`remote_validation_failed`、`mcp_sync_report`
+
+这个命令当前只负责 remediated flow version 的 publish/update 契约，不负责 round2 失败再修复，也不负责任何 `flow get|list|regen-product` 之类后续治理切片。
 
 `tiangong publish run` 现在已经成为统一 publish 契约入口，负责：
 

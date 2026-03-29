@@ -6,6 +6,7 @@ import path from 'node:path';
 import { executeCli } from '../src/cli.js';
 import type { DotEnvLoadResult } from '../src/lib/dotenv.js';
 import type { FetchLike } from '../src/lib/http.js';
+import type { RunFlowPublishVersionOptions } from '../src/lib/flow-publish-version.js';
 import type { RunFlowRemediateOptions } from '../src/lib/flow-remediate.js';
 import type { RunFlowReviewOptions } from '../src/lib/review-flow.js';
 
@@ -142,6 +143,7 @@ test('executeCli returns help for publish and validation namespaces', async () =
   assert.equal(flowHelp.exitCode, 0);
   assert.match(flowHelp.stdout, /tiangong flow <subcommand>/u);
   assert.match(flowHelp.stdout, /remediate/u);
+  assert.match(flowHelp.stdout, /publish-version/u);
 });
 
 test('executeCli returns help for publish and validation subcommands', async () => {
@@ -177,6 +179,15 @@ test('executeCli returns help for publish and validation subcommands', async () 
     /tiangong flow remediate --input-file <file> --out-dir <dir>/u,
   );
   assert.match(flowRemediateHelp.stdout, /ready_for_mcp/u);
+
+  const flowPublishHelp = await executeCli(['flow', 'publish-version', '--help'], makeDeps());
+  assert.equal(flowPublishHelp.exitCode, 0);
+  assert.match(
+    flowPublishHelp.stdout,
+    /tiangong flow publish-version --input-file <file> --out-dir <dir>/u,
+  );
+  assert.match(flowPublishHelp.stdout, /--commit/u);
+  assert.match(flowPublishHelp.stdout, /TIANGONG_LCA_API_BASE_URL/u);
 });
 
 test('executeCli returns group help for search and admin namespaces', async () => {
@@ -1689,10 +1700,183 @@ test('executeCli dispatches flow remediate to the implemented CLI module', async
   }
 });
 
-test('executeCli returns parsing errors for invalid flow remediate flags', async () => {
+test('executeCli dispatches flow publish-version to the implemented CLI module', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'tg-cli-flow-publish-version-dispatch-'));
+  const inputFile = path.join(dir, 'ready-flows.jsonl');
+  writeFileSync(inputFile, '[]\n', 'utf8');
+
+  try {
+    let observedOptions: RunFlowPublishVersionOptions | undefined;
+    const result = await executeCli(
+      [
+        'flow',
+        'publish-version',
+        '--input-file',
+        inputFile,
+        '--out-dir',
+        path.join(dir, 'publish-version'),
+        '--commit',
+        '--max-workers',
+        '8',
+        '--limit',
+        '12',
+        '--target-user-id',
+        'user-123',
+        '--json',
+      ],
+      {
+        ...makeDeps(),
+        runFlowPublishVersionImpl: async (options) => {
+          observedOptions = options;
+          return {
+            schema_version: 1,
+            generated_at_utc: '2026-03-30T10:00:00.000Z',
+            status: 'completed_flow_publish_version',
+            mode: 'commit',
+            input_file: inputFile,
+            out_dir: path.join(dir, 'publish-version'),
+            counts: {
+              total_rows: 2,
+              success_count: 2,
+              failure_count: 0,
+            },
+            operation_counts: {
+              insert: 1,
+              update_existing: 1,
+            },
+            max_workers: 8,
+            limit: 12,
+            target_user_id_override: 'user-123',
+            files: {
+              success_list: path.join(
+                dir,
+                'publish-version',
+                'flows_tidas_sdk_plus_classification_mcp_success_list.json',
+              ),
+              remote_failed: path.join(
+                dir,
+                'publish-version',
+                'flows_tidas_sdk_plus_classification_remote_validation_failed.jsonl',
+              ),
+              report: path.join(
+                dir,
+                'publish-version',
+                'flows_tidas_sdk_plus_classification_mcp_sync_report.json',
+              ),
+            },
+          };
+        },
+      },
+    );
+
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stderr, '');
+    assert.equal(JSON.parse(result.stdout).status, 'completed_flow_publish_version');
+    assert.equal(observedOptions?.inputFile, inputFile);
+    assert.equal(observedOptions?.outDir, path.join(dir, 'publish-version'));
+    assert.equal(observedOptions?.commit, true);
+    assert.equal(observedOptions?.maxWorkers, 8);
+    assert.equal(observedOptions?.limit, 12);
+    assert.equal(observedOptions?.targetUserId, 'user-123');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('executeCli maps flow publish-version failure reports to exit code 1', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'tg-cli-flow-publish-version-failure-exit-'));
+  const inputFile = path.join(dir, 'ready-flows.jsonl');
+  writeFileSync(inputFile, '[]\n', 'utf8');
+
+  try {
+    const result = await executeCli(
+      [
+        'flow',
+        'publish-version',
+        '--input-file',
+        inputFile,
+        '--out-dir',
+        path.join(dir, 'publish-version'),
+      ],
+      {
+        ...makeDeps(),
+        runFlowPublishVersionImpl: async () => ({
+          schema_version: 1,
+          generated_at_utc: '2026-03-30T10:30:00.000Z',
+          status: 'completed_flow_publish_version_with_failures',
+          mode: 'commit',
+          input_file: inputFile,
+          out_dir: path.join(dir, 'publish-version'),
+          counts: {
+            total_rows: 1,
+            success_count: 0,
+            failure_count: 1,
+          },
+          operation_counts: {},
+          max_workers: 4,
+          limit: null,
+          target_user_id_override: null,
+          files: {
+            success_list: path.join(
+              dir,
+              'publish-version',
+              'flows_tidas_sdk_plus_classification_mcp_success_list.json',
+            ),
+            remote_failed: path.join(
+              dir,
+              'publish-version',
+              'flows_tidas_sdk_plus_classification_remote_validation_failed.jsonl',
+            ),
+            report: path.join(
+              dir,
+              'publish-version',
+              'flows_tidas_sdk_plus_classification_mcp_sync_report.json',
+            ),
+          },
+        }),
+      },
+    );
+
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.stderr, '');
+    assert.equal(JSON.parse(result.stdout).status, 'completed_flow_publish_version_with_failures');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('executeCli returns parsing errors for invalid flow remediate and publish-version flags', async () => {
   const result = await executeCli(['flow', 'remediate', '--bad-flag'], makeDeps());
   assert.equal(result.exitCode, 2);
   assert.match(result.stderr, /INVALID_ARGS/u);
+
+  const invalidPublishArgsResult = await executeCli(
+    ['flow', 'publish-version', '--bad-flag'],
+    makeDeps(),
+  );
+  assert.equal(invalidPublishArgsResult.exitCode, 2);
+  assert.match(invalidPublishArgsResult.stderr, /INVALID_ARGS/u);
+
+  const invalidModeResult = await executeCli(
+    ['flow', 'publish-version', '--commit', '--dry-run'],
+    makeDeps(),
+  );
+  assert.equal(invalidModeResult.exitCode, 2);
+  assert.match(invalidModeResult.stderr, /FLOW_PUBLISH_VERSION_MODE_CONFLICT/u);
+
+  const invalidWorkersResult = await executeCli(
+    ['flow', 'publish-version', '--max-workers', '0'],
+    makeDeps(),
+  );
+  assert.equal(invalidWorkersResult.exitCode, 2);
+  assert.match(invalidWorkersResult.stderr, /INVALID_FLOW_PUBLISH_VERSION_MAX_WORKERS/u);
+
+  const invalidLimitResult = await executeCli(
+    ['flow', 'publish-version', '--limit=-1'],
+    makeDeps(),
+  );
+  assert.equal(invalidLimitResult.exitCode, 2);
+  assert.match(invalidLimitResult.stderr, /INVALID_FLOW_PUBLISH_VERSION_LIMIT/u);
 });
 
 test('executeCli supports alternate review flow input modes and validates numeric review-flow flags', async () => {
