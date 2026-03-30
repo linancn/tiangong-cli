@@ -42,6 +42,7 @@ tiangong
     list
     remediate
     publish-version
+    regen-product
   process
     get
     auto-build
@@ -74,6 +75,7 @@ tiangong
 | `tiangong flow list` | 统一 CLI 持有的只读 flow 枚举面；从 `TIANGONG_LCA_API_BASE_URL` 推导 Supabase REST 路径并提供稳定过滤/排序/分页 |
 | `tiangong flow remediate` | 本地 flow governance round1 deterministic remediation、artifact-first 输出 |
 | `tiangong flow publish-version` | 统一 CLI 持有的 remediated-flow publish/update 入口；从 `TIANGONG_LCA_API_BASE_URL` 推导 Supabase REST 路径并写出稳定 success/failure artifacts |
+| `tiangong flow regen-product` | 本地治理后 process-side 再生产物入口；在一个命令下执行 scan / repair / apply / validate 并输出稳定 artifacts |
 | `tiangong process get` | 统一 CLI 持有的只读 process 详情读取面；从 `TIANGONG_LCA_API_BASE_URL` 推导 Supabase REST 路径并按 `id/version` 读取 |
 | `tiangong process auto-build` | 本地 `process_from_flow` intake、run-id 生成、artifact scaffold 预写 |
 | `tiangong process resume-build` | 本地 `process_from_flow` resume handoff、state-lock/manifest 收口、resume 元数据与报告输出 |
@@ -136,7 +138,7 @@ tiangong
 - 已实现的 `flow list` 保留 deterministic direct-read 边界，支持稳定 `id/state_code/type_of_dataset` 过滤、显式 `order=id.asc,version.asc` 默认值，以及 `--all --page-size` 的 offset 分页
 - 已实现的 `flow remediate` 保留旧 invalid-flow 输入与 round1 artifact 契约，但运行时已经收口到 CLI，不再需要 skill 私有 Python remediation 入口
 - 已实现的 `flow publish-version` 直接从 `TIANGONG_LCA_API_BASE_URL` 推导 `/rest/v1/flows` 写入路径，支持 dry-run/commit，并保留 `mcp_success_list`、`remote_validation_failed`、`mcp_sync_report` 这些历史文件名
-- 其余未实现的 `lifecyclemodel` / `process` 子命令仍只提供 help 和固定命名
+- 已实现的 `flow regen-product` 把治理后的 process-side 再生产物链收口到 CLI，在一个命令下固定 `scan -> repair plan -> optional apply -> optional validate` 契约，并把退出码 `1` 保留给 `--apply` 之后的本地校验失败
 - 其余未实现的 `flow` / `lifecyclemodel` / `process` 子命令仍只提供 help 和固定命名
 - 这样做的目的不是“假装已完成”，而是先固定命令树，再逐个把 workflow 迁入 TypeScript CLI
 
@@ -510,6 +512,7 @@ TIANGONG_LCA_LLM_MODEL=
 | `flow list` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY` |
 | `flow remediate` | 无 |
 | `flow publish-version` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY` |
+| `flow regen-product` | 无 |
 | `publish run` | 无 |
 | `validation run` | 无 |
 

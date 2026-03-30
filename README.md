@@ -209,6 +209,7 @@ node ./bin/tiangong.js doctor
 node ./bin/tiangong.js process get --id <process-id> --json
 node ./bin/tiangong.js flow get --id <flow-id> --json
 node ./bin/tiangong.js flow list --state-code 100 --limit 20 --json
+node ./bin/tiangong.js flow regen-product --processes-file ./processes.jsonl --scope-flow-file ./flows.jsonl --out-dir ./flow-regen --apply --json
 node ./bin/tiangong.js process auto-build --input ./examples/process-auto-build.request.json --json
 node ./bin/tiangong.js process resume-build --run-id <run-id> --json
 node ./bin/tiangong.js process publish-build --run-id <run-id> --json

@@ -37,6 +37,7 @@
 - `tiangong flow list`
 - `tiangong flow remediate`
 - `tiangong flow publish-version`
+- `tiangong flow regen-product`
 - `tiangong publish run`
 - `tiangong validation run`
 - `tiangong admin embedding-run`
@@ -110,6 +111,7 @@ TIANGONG_LCA_LLM_MODEL=
 | `flow list` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY` |
 | `flow remediate` | 无 |
 | `flow publish-version` | `TIANGONG_LCA_API_BASE_URL`、`TIANGONG_LCA_API_KEY` |
+| `flow regen-product` | 无 |
 | `publish run` | 无 |
 | `validation run` | 无 |
 
@@ -133,6 +135,7 @@ npm start -- flow get --id <flow-id> --version <version> --json
 npm start -- flow list --id <flow-id> --state-code 100 --limit 20 --json
 npm start -- flow remediate --input-file ./invalid-flows.jsonl --out-dir ./flow-remediation --json
 npm start -- flow publish-version --input-file ./ready-flows.jsonl --out-dir ./flow-publish --dry-run --json
+npm start -- flow regen-product --processes-file ./processes.jsonl --scope-flow-file ./flows.jsonl --out-dir ./flow-regen --apply --json
 npm start -- publish run --input ./examples/publish-run.request.json --dry-run
 npm start -- validation run --input-dir ./tidas-package --engine auto
 npm start -- admin embedding-run --input ./jobs.json --dry-run
