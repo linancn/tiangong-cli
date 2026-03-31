@@ -32,14 +32,12 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            .ci/tidas-sdk/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install and build tidas-sdk
+      - name: Bootstrap and build tidas-sdk
         working-directory: .ci/tidas-sdk
         run: |
-          npm ci
+          npm run bootstrap
           npm run build:typescript
 
       - name: Install dependencies
