@@ -1,0 +1,48 @@
+name: quality-gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  quality-gate:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Coverage gate
+        run: npm run test:coverage
+
+      - name: Assert 100% coverage
+        run: npm run test:coverage:assert-full
+
+      - name: Aggregate prepush gate
+        if: matrix.os == 'windows-latest'
+        run: npm run prepush:gate
