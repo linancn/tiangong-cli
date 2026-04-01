@@ -35,11 +35,12 @@
 - [x] 跑通 `npm run test:coverage`
 - [x] 跑通 `npm run test:coverage:assert-full`
 - [x] 跑通 `npm run prepush:gate`
-- [ ] 提交 CLI 变更、开 PR，并同步 GitHub 记录
+- [x] 提交 CLI 变更、开 PR，并同步 GitHub 记录
 - [ ] 合并 CLI PR 后完成 workspace submodule integration
 
 最近更新：
 
+- 2026-04-01：已提交 `7bd8a93`，推送分支 `codex/chore-issue-55-direct-deps` 到 fork，并创建 PR `tiangong-lca/tiangong-cli#56`；child issue `#55` 的执行 TODO 已同步为完成态，parent / child issue 都已补充结构化进展评论。
 - 2026-04-01：`npm run prepush:gate` 已通过，包含 `lint`、`test:coverage`、`test:coverage:assert-full` 全绿；repo-local 质量门已全部满足。
 - 2026-04-01：已用 Prettier 修复 `test/tidas-sdk-package-validator.test.ts` 的格式问题，当前准备重跑 `npm run prepush:gate`。
 - 2026-04-01：首次执行 `npm run prepush:gate` 失败，阻塞点仅为 `test/tidas-sdk-package-validator.test.ts` 的 Prettier 格式检查；coverage 与 full-coverage assert 已无阻塞，下一步只修格式并重跑整套门禁。
@@ -52,7 +53,7 @@
 - 2026-04-01：repo-local `quality-gate.yml` 已匹配新的依赖模型，不再依赖 `.ci/tidas-sdk`、`TIANGONG_LCA_TIDAS_SDK_DIR` 或其他 sibling checkout 注入。
 - 2026-04-01：`npm run lint` 已通过；过程中清理了 `supabase-client` 重构后遗留的 2 个未使用 import，并补齐了相关 TS 文件格式化。
 - 2026-04-01：`npm test` 已通过；`flow publish-reviewed-data` 的 process commit failure report 已补齐 transport failure 细节保留逻辑，393/393 用例全绿。
-- 2026-04-01：`npm run test:coverage` 已跑通，但 `npm run test:coverage:assert-full` 当前仍失败；缺口主要集中在 `src/lib/supabase-client.ts`、`src/lib/tidas-sdk-package-validator.ts` 以及少量受重构影响的 flow helper 分支，下一步继续补测试直到 100%。
+- 2026-04-01：`npm run test:coverage` 首次全量执行时虽已跑通，但当时 `npm run test:coverage:assert-full` 仍失败；后续已通过补测把 `src/lib/supabase-client.ts`、`src/lib/tidas-sdk-package-validator.ts` 与受重构影响的 flow helper 分支全部收敛到 100%。
 - 当前已确认事实：
   - `package.json` / `package-lock.json` 已显式包含 `@supabase/supabase-js` 与 `@tiangong-lca/tidas-sdk`。
   - CLI 的 Supabase 读写链已切到 `@supabase/supabase-js`，`process get`、`flow get/list`、`publish`、`flow publish-version` 等路径继续保留既有 `source_url` / `source_urls`、冲突处理和错误码语义。
@@ -71,6 +72,5 @@
     - `lifecyclemodel-orchestrate`
   - 上述定向测试当前全部通过。
 - 下一阶段：
-  - 跑全量质量门
-  - commit / push / PR
+  - 合并 CLI PR
   - merge 后做 workspace integration
